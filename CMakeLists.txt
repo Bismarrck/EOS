@@ -26,6 +26,12 @@ target_link_libraries(Phase1Test PRIVATE
 
 # Ensure main_phase1.cpp can find EquationOfStateV1.h
 target_include_directories(Phase1Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
+
+# --- Phase 2: Executable for testing ---
+add_executable(Phase2Test src/cpp/main_phase2.cpp $<TARGET_OBJECTS:eos_v1_obj>)
+target_link_libraries(Phase2Test PRIVATE eos_fortran_core_obj)
+target_include_directories(Phase2Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
+
 # ------------------------------------------------------
 
 # Optional: Add examples and tests later

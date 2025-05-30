@@ -17,6 +17,31 @@ extern "C" {
     // bool c_get_use_tfd_data_ver1(int* istat_out); // If getter is implemented
 }
 
+extern "C" {
+    // Assuming fixed dimensions 100x50 for now in the C wrapper arguments
+    // If dimensions can vary and need to be passed, the signature would change.
+    void c_tfd_eos_compute(double rho, double T,
+                           const double* matrix_a_flat, const double* matrix_b_flat, // Pass as flat arrays
+                           int dim1_a, int dim2_a, // Dimensions of A
+                           int dim1_b, int dim2_b, // Dimensions of B
+                           double* tfd_result_x, double* tfd_result_y,
+                           int* istat_out); // Good practice to always have an istat
+}
+
+
+// Structure to hold TFD matrix data in C++
+struct TFDMatrices {
+    std::vector<double> matrix_A; // Stored flat
+    std::vector<double> matrix_B; // Stored flat
+    int N1_A = 0, N2_A = 0;       // Dimensions for A
+    int N1_B = 0, N2_B = 0;       // Dimensions for B
+    bool initialized = false;
+
+    // Helper to access elements as if 2D (for C++ side if needed, Fortran gets flat)
+    // Example for matrix_A: A(row, col) = matrix_A[row * N2_A + col]
+};
+
+
 
 class EquationOfStateV1 {
 public:
@@ -38,6 +63,15 @@ public:
         // For analytic, we might just use the EOSType to dispatch
     };
 
+    // --- TFD Data Management ---
+    // Loads TFD data from specified files.
+    // For Phase 2, we might load one set. Later, initialize might choose.
+    int loadTFDData(const std::string& file_A_path, const std::string& file_B_path);
+
+    // --- TFD Computation Call (for testing Phase 2 directly) ---
+    // In reality, Complicated_EOS would trigger this.
+    int computeTFD(double rho, double T, double& result_x, double& result_y);
+
 
     // --- Control Variable Management ---
     int setComplicatedEOSUseOldColdTerm(bool value);
@@ -50,7 +84,7 @@ public:
     int computeCarbonEOS(double rho, double T, double& P, double& E);
 
     // --- Methods to be implemented in later phases ---
-    // int initialize(const std::vector<int>& eos_id_list, const std::string& eos_data_dir, bool use_tfd_version_1);
+    // int initialize(const std::vector<int>& eos_id_list, const std::string& eos_data_dir);
     // int check_eos_data_dir(/* ... */);
     // int pack(char *&buffer, int &buffer_size);
     // int unpack(const char *buffer, int buffer_size);
@@ -58,8 +92,15 @@ public:
     // void free();
 
 private:
-    // For Phase 1, not much state is managed yet.
-    // This will grow to include TFD data, material params, etc.
+
+    // --- TFD ---
+    TFDMatrices tfd_data; // Member to store loaded TFD matrices
+
+    // Helper function to read a single TFD matrix from a file
+    // Returns 0 on success, error code on failure.
+    static int readTFDMatrixFromFile(const std::string& file_path,
+                                     std::vector<double>& matrix_data,
+                                     int& N1, int& N2);
 
     // Example: mapping an internal C++ EOSType to a function pointer or lambda
     // for dispatching compute calls. (More for Phase 4)
