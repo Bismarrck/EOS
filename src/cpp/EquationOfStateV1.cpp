@@ -101,39 +101,59 @@ int EquationOfStateV1::setUseTFDDataVer1(bool value) {
     if (istat != 0) {
         std::cerr << "C++ Error: Failed to set use_tfd_data_ver1. Fortran istat: " << istat << std::endl;
     }
+    tfd_use_ver1_setting_ = value;
     return istat;
 }
 
 // New helper function in EquationOfStateV1.cpp
 int EquationOfStateV1::read_matrix_values_from_stream(std::ifstream& infile, int N1, int N2,
-                                                    std::vector<double>& matrix_data, const std::string& matrix_name_for_error) {
+        std::vector<double>& matrix_data, const std::string& matrix_name_for_error) {
     matrix_data.clear();
     matrix_data.reserve(static_cast<size_t>(N1) * N2);
     double value;
-    std::string line;
+    std::string line_content; // Renamed from 'line' for clarity
 
     size_t values_to_read = static_cast<size_t>(N1) * N2;
     size_t values_read = 0;
 
-    // Read values, handling multiple values per line
-    while (values_read < values_to_read && std::getline(infile, line)) {
-        std::istringstream val_ss(line);
+    while (values_read < values_to_read && std::getline(infile, line_content)) {
+        // Handle comments: take substring before '#'
+        size_t comment_pos = line_content.find('#');
+        if (comment_pos != std::string::npos) {
+            line_content = line_content.substr(0, comment_pos);
+        }
+
+        // Trim trailing whitespace from the line_content after removing comment
+        // to prevent istringstream from trying to parse empty strings if line was just a comment
+        line_content.erase(line_content.find_last_not_of(" \t\n\r\f\v") + 1);
+        // Trim leading whitespace
+        line_content.erase(0, line_content.find_first_not_of(" \t\n\r\f\v"));
+
+        if (line_content.empty()) { // Skip empty lines or lines that became empty after comment removal
+            continue;
+        }
+
+        std::istringstream val_ss(line_content);
         while (val_ss >> value) {
             if (values_read < values_to_read) {
                 matrix_data.push_back(value);
                 values_read++;
             } else {
-                std::cerr << "Warning: Extra data found after reading " << matrix_name_for_error << std::endl;
-                // break from inner and outer loop or just return success if this is acceptable
-                goto end_read_loop; // Ugly, but avoids nested break flags
+                std::cerr << "Warning: Extra data found after reading " << matrix_name_for_error
+                          << " (expected " << values_to_read << ")" << std::endl;
+                // This indicates more numbers on the line than needed for this matrix;
+                // it might be an issue or acceptable depending on file format strictness.
+                // For now, we stop reading for this matrix if we have enough.
+                goto end_matrix_read_loop;
             }
         }
-        if (val_ss.fail() && !val_ss.eof()) { // Check for non-double data on a line
-             std::cerr << "Error: Non-double value encountered while reading " << matrix_name_for_error << std::endl;
+        if (val_ss.fail() && !val_ss.eof() && !val_ss.str().empty()) { // Check for non-double data on a non-empty processed line
+             std::cerr << "Error: Non-double value encountered while reading " << matrix_name_for_error
+                       << " from line content: \"" << line_content << "\"" << std::endl;
              return EOS_ERROR_FILE_PARSE;
         }
     }
-end_read_loop:;
+end_matrix_read_loop:;
 
     if (values_read != values_to_read) {
         std::cerr << "Error: Read " << values_read << " values for " << matrix_name_for_error
@@ -143,7 +163,6 @@ end_read_loop:;
     }
     return EOS_SUCCESS;
 }
-
 
 int EquationOfStateV1::loadTFDDataInternal(const std::string& tfd_base_dir) {
     std::string tfd_file_name = (tfd_use_ver1_setting_ ? "tfd_ver1.dat" : "tfd_ver2.dat");
@@ -156,18 +175,47 @@ int EquationOfStateV1::loadTFDDataInternal(const std::string& tfd_base_dir) {
         return EOS_ERROR_FILE_NOT_FOUND;
     }
 
-    std::string line;
+    std::string line_content;
     // Read common dimensions N1, N2
-    if (!std::getline(infile, line)) {
+    if (!std::getline(infile, line_content)) {
         std::cerr << "Error: Could not read dimensions line from " << full_tfd_path << std::endl;
         tfd_data.initialized = false;
         return EOS_ERROR_FILE_PARSE;
     }
-    std::istringstream dim_ss(line);
-    if (!(dim_ss >> tfd_data.N1 >> tfd_data.N2)) {
-        std::cerr << "Error: Could not parse dimensions N1, N2 from " << full_tfd_path << std::endl;
-        tfd_data.initialized = false;
-        return EOS_ERROR_FILE_PARSE;
+   size_t comment_pos = line_content.find('#');
+    if (comment_pos != std::string::npos) {
+        line_content = line_content.substr(0, comment_pos);
+    }
+    // Trim whitespace (optional for dimension line if you expect only N1 N2 # comment)
+    line_content.erase(line_content.find_last_not_of(" \t\n\r\f\v") + 1);
+    line_content.erase(0, line_content.find_first_not_of(" \t\n\r\f\v"));
+
+
+    std::istringstream dim_ss(line_content);
+    if (!(dim_ss >> tfd_data.N1 >> tfd_data.N2) || !line_content.empty() && dim_ss.eof() && !dim_ss.fail()) {
+        // The "|| !line_content.empty() && ..." part is tricky. If there's trailing non-numeric, non-comment data after N1 N2,
+        // it might be an error. A simpler check is just if N1 and N2 were read.
+        // A more robust check would be to see if anything is left in dim_ss after reading N1 and N2.
+        std::string remaining_in_dim_line;
+        if (dim_ss >> remaining_in_dim_line) { // if successfully read something else
+             std::cerr << "Error: Extra data '" << remaining_in_dim_line << "' found on dimension line in " << full_tfd_path << std::endl;
+             tfd_data.initialized = false;
+             return EOS_ERROR_FILE_PARSE;
+        }
+        // If the previous check isn't catching it, and the error "Non-double value encountered while reading Matrix A"
+        // occurs, it means the dimension line itself might be consumed by the matrix reader if not careful,
+        // or the matrix reader is picking up the comment part of the dimension line.
+        // The critical part is that after reading dimensions, the stream 'infile' is positioned correctly for matrix A.
+        // The provided `read_matrix_values_from_stream` should now handle comments on its own lines.
+        // The error "Non-double value encountered while reading Matrix A" likely means that the first line
+        // matrix_A_reader tries to parse starts with '#' or similar after N1, N2 are read from the file stream.
+
+        // Let's re-verify the dim_ss check
+        if (!(std::istringstream(line_content) >> tfd_data.N1 >> tfd_data.N2)) { // Use a new istringstream for this check
+            std::cerr << "Error: Could not parse dimensions N1, N2 from processed line: \"" << line_content << "\" in " << full_tfd_path << std::endl;
+            tfd_data.initialized = false;
+            return EOS_ERROR_FILE_PARSE;
+        }
     }
 
     if (tfd_data.N1 <= 0 || tfd_data.N2 <= 0) {
@@ -192,9 +240,7 @@ int EquationOfStateV1::loadTFDDataInternal(const std::string& tfd_base_dir) {
         tfd_data.initialized = false;
         return EOS_ERROR_TFD_LOAD_B + istat_B;
     }
-    std::cout << "Successfully read Matrix B data." << std::endl;
 
-    // If there were more matrices, continue reading them here.
 
     tfd_data.initialized = true;
     std::cout << "C++: TFD data (" << (tfd_use_ver1_setting_ ? "ver1" : "ver2") << ") loaded successfully from " << full_tfd_path << std::endl;
