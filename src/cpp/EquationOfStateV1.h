@@ -30,14 +30,10 @@ extern "C" {
 
 // Structure to hold TFD matrix data in C++
 struct TFDMatrices {
-    std::vector<double> matrix_A; // Stored flat
-    std::vector<double> matrix_B; // Stored flat
-    int N1_A = 0, N2_A = 0;       // Dimensions for A
-    int N1_B = 0, N2_B = 0;       // Dimensions for B
+    std::vector<double> matrix_A;
+    std::vector<double> matrix_B;
+    int N1 = 0, N2 = 0; // Common dimensions for A and B
     bool initialized = false;
-
-    // Helper to access elements as if 2D (for C++ side if needed, Fortran gets flat)
-    // Example for matrix_A: A(row, col) = matrix_A[row * N2_A + col]
 };
 
 // New extern "C" for Complicated EOS
@@ -49,76 +45,106 @@ extern "C" {
                            int* istat_out);
 }
 
+// Error codes
+constexpr int EOS_SUCCESS = 0;
+constexpr int EOS_ERROR_FILE_NOT_FOUND = 1;
+constexpr int EOS_ERROR_FILE_PARSE = 2;
+constexpr int EOS_ERROR_INVALID_DIMENSIONS = 3;
+constexpr int EOS_ERROR_TFD_LOAD_A = 11;
+constexpr int EOS_ERROR_TFD_LOAD_B = 12;
+constexpr int EOS_ERROR_TFD_NOT_INIT = 13;
+constexpr int EOS_ERROR_UNKNOWN_EOS_ID = 21;
+constexpr int EOS_ERROR_INVALID_EOS_TYPE = 22;
+constexpr int EOS_ERROR_PARAMS_NOT_LOADED = 23;
+constexpr int EOS_ERROR_ANALYTIC_DISPATCH = 24;
+
 
 class EquationOfStateV1 {
 public:
+    // EOSType to be read from files
+    enum class EOSTypeFromFile {
+        NOT_SET,
+        ANALYTIC,
+        COMPLICATED
+    };
+
+    // More specific internal types for dispatch
+    enum class InternalEOSType {
+        UNKNOWN,
+        ANALYTIC_AIR,
+        ANALYTIC_CARBON,
+        COMPLICATED_V1 // Example if we have versions of complicated models
+    };
+
+    // C++ function signature for an analytic EOS compute call (after C++ shimming)
+    // Takes (rho, T, P_out, E_out, istat_out)
+    using AnalyticEOSFunc = std::function<int(double, double, double&, double&)>;
+
+    // C++ function signature for a complicated EOS compute call
+    // Takes (params_vec, rho, T, P_out, E_out, dPdT_out, dEdT_out, dPdrho_out, istat_out)
+    using ComplicatedEOSFunc = std::function<int(const std::vector<double>&, double, double,
+                                                 double&, double&, double&, double&, double&)>;
+
+
+    struct MaterialData {
+        int eos_id_key;                   // The ID used to register/find this material
+        EOSTypeFromFile type_from_file; // Type read from #TYPE line
+        InternalEOSType internal_type;  // Specific internal type for dispatch
+
+        std::vector<double> params;       // For COMPLICATED type
+        AnalyticEOSFunc analytic_func;    // For ANALYTIC type (points to a C++ lambda/shim)
+
+        MaterialData() : eos_id_key(0), type_from_file(EOSTypeFromFile::NOT_SET),
+                         internal_type(InternalEOSType::UNKNOWN), analytic_func(nullptr) {}
+    };
+
+
     EquationOfStateV1();
     ~EquationOfStateV1();
 
-    // Enum for identifying EOS types (will be used more in Phase 4)
-    enum class EOSType {
-        UNKNOWN,
-        ANALYTIC_AIR_2000,      // Example specific analytic type
-        ANALYTIC_CARBON_2001,   // Example specific analytic type
-        COMPLICATED_GENERIC     // Placeholder for complicated type
-    };
+    // --- Initialization and Configuration ---
+    int initialize(const std::vector<int>& eos_id_list, const std::string& eos_data_dir);
+    int check_eos_data_dir(const std::string& eos_data_dir, const std::vector<int>& eos_ids_to_check); // Basic check
 
-    // Placeholder for material data (will be expanded)
-    struct MaterialInfo {
-        EOSType type;
-        int eos_id; // The unique ID like 10000, 10001, or a special ID for analytic
-        // For analytic, we might just use the EOSType to dispatch
-    };
-
-    // --- TFD Data Management ---
-    // Loads TFD data from specified files.
-    // For Phase 2, we might load one set. Later, initialize might choose.
-    int loadTFDData(const std::string& file_A_path, const std::string& file_B_path);
-
-    // --- TFD Computation Call (for testing Phase 2 directly) ---
-    // In reality, Complicated_EOS would trigger this.
-    int computeTFD(double rho, double T, double& result_x, double& result_y);
-
-
-    // --- Control Variable Management ---
+    // Control Variable Setters (from Phase 1)
     int setComplicatedEOSUseOldColdTerm(bool value);
-    int setUseTFDDataVer1(bool value);
-    // bool getUseTFDDataVer1(int* istat_out); // If getter is needed
+    int setUseTFDDataVer1(bool value); // This will influence TFD file choice in initialize
 
-    // --- EOS Computation (very basic for Phase 1) ---
-    // This will evolve significantly into the main compute method
-    int computeAirEOS(double rho, double T, double& P, double& E);
-    int computeCarbonEOS(double rho, double T, double& P, double& E);
+    // --- Computation ---
+    int compute(int eos_id, double rho, double T,
+                double& P, double& E,
+                double& dPdT, double& dEdT, double& dPdrho); // dPdT etc. might be zero for some analytic
 
-    // --- Complicated EOS Computation Call (for testing Phase 3 directly) ---
-    // This will be part of the main `compute(eos_id, ...)` method in Phase 4.
-    int computeComplicatedEOS(const std::vector<double>& params, // Material-specific params
-                              double rho, double T,
-                              double& P, double& E, double& dPdT, double& dEdT, double& dPdrho);
-
-    // --- Methods to be implemented in later phases ---
-    // int initialize(const std::vector<int>& eos_id_list, const std::string& eos_data_dir);
-    // int check_eos_data_dir(/* ... */);
-    // int pack(char *&buffer, int &buffer_size);
-    // int unpack(const char *buffer, int buffer_size);
-    // int compute(int eos_id, double rho, double T, double& P, double& E, ...); // Main compute
-    // void free();
+    void free_resources(); // Renamed from free() to avoid conflict if any
 
 private:
+    // --- Private Helper Methods ---
+    // Helper to read a single matrix's data from an already open stream, given dimensions
+    static int read_matrix_values_from_stream(std::ifstream& infile, int N1, int N2,
+                                              std::vector<double>& matrix_data, const std::string& matrix_name_for_error);
+    // Main TFD loading function
+    int loadTFDDataInternal(const std::string& tfd_base_dir); // Takes base dir for TFD files
 
-    // --- TFD ---
-    TFDMatrices tfd_data; // Member to store loaded TFD matrices
+    // C++ shim functions for specific analytic EOS, these call the extern "C" Fortran wrappers
+    // They are bound to std::function in the MaterialData
+    static int call_air_eos_2000_shim(double rho, double T, double& P, double& E);
+    static int call_carbon_eos_2001_shim(double rho, double T, double& P, double& E);
+    // Note: If analytic functions also produce derivatives, their shims and AnalyticEOSFunc signature would change.
 
-    // Helper function to read a single TFD matrix from a file
-    // Returns 0 on success, error code on failure.
-    static int readTFDMatrixFromFile(const std::string& file_path,
-                                     std::vector<double>& matrix_data,
-                                     int& N1, int& N2);
+    // --- Members ---
+    TFDMatrices tfd_data;
+    std::map<int, MaterialData> loaded_materials_; // Keyed by eos_id from input list
 
-    // Example: mapping an internal C++ EOSType to a function pointer or lambda
-    // for dispatching compute calls. (More for Phase 4)
-    // using AnalyticEOSFunc = int(EquationOfStateV1::*)(double, double, double&, double&);
-    // std::map<EOSType, AnalyticEOSFunc> analytic_dispatch_table;
+    // Registry for known analytic EOS types and their corresponding C++ shim functions and internal types
+    // Key: The eos_id as it would appear in eosXXXXX.dat (e.g. 10000 for a complicated, or a specific ID for analytic)
+    // Value: Pair of (InternalEOSType, C++ shim function pointer)
+    struct AnalyticRegistryEntry {
+        InternalEOSType internal_type;
+        AnalyticEOSFunc func_ptr;
+    };
+    std::map<int, AnalyticRegistryEntry> analytic_eos_registry_;
+
+    bool tfd_use_ver1_setting_ = true; // C++ mirror of the Fortran control, default true
 };
 
 #endif // EQUATIONOFSTATEV1_H

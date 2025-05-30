@@ -15,27 +15,34 @@ add_subdirectory(src/cpp)     # Process cpp CMakeLists
 
 # --- Phase 1: Executable for testing ---
 # This will evolve into building a library target in later phases.
-add_executable(Phase1Test src/cpp/main_phase1.cpp $<TARGET_OBJECTS:eos_v1_obj>)
-
-# Link the Fortran object files and C++ object files
-target_link_libraries(Phase1Test PRIVATE
-        eos_fortran_core_obj  # Fortran object files
-        # eos_v1_obj # If main_phase1.cpp does not include EquationOfStateV1.cpp directly and eos_v1_obj is an OBJECT lib
-        # The $<TARGET_OBJECTS:eos_v1_obj> in add_executable handles this for OBJECT libs
-)
+#add_executable(Phase1Test src/cpp/main_phase1.cpp $<TARGET_OBJECTS:eos_v1_obj>)
+#
+## Link the Fortran object files and C++ object files
+#target_link_libraries(Phase1Test PRIVATE
+#        eos_fortran_core_obj  # Fortran object files
+#        # eos_v1_obj # If main_phase1.cpp does not include EquationOfStateV1.cpp directly and eos_v1_obj is an OBJECT lib
+#        # The $<TARGET_OBJECTS:eos_v1_obj> in add_executable handles this for OBJECT libs
+#)
 
 # Ensure main_phase1.cpp can find EquationOfStateV1.h
-target_include_directories(Phase1Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
+#target_include_directories(Phase1Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
 
 # --- Phase 2: Executable for testing ---
-add_executable(Phase2Test src/cpp/main_phase2.cpp $<TARGET_OBJECTS:eos_v1_obj>)
-target_link_libraries(Phase2Test PRIVATE eos_fortran_core_obj)
-target_include_directories(Phase2Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
+#add_executable(Phase2Test src/cpp/main_phase2.cpp $<TARGET_OBJECTS:eos_v1_obj>)
+#target_link_libraries(Phase2Test PRIVATE eos_fortran_core_obj)
+#target_include_directories(Phase2Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
 
 # --- Phase 3: Executable for testing ---
-add_executable(Phase3Test src/cpp/main_phase3.cpp $<TARGET_OBJECTS:eos_v1_obj>)
-target_link_libraries(Phase3Test PRIVATE eos_fortran_core_obj)
-target_include_directories(Phase3Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
+#add_executable(Phase3Test src/cpp/main_phase3.cpp $<TARGET_OBJECTS:eos_v1_obj>)
+#target_link_libraries(Phase3Test PRIVATE eos_fortran_core_obj)
+#target_include_directories(Phase3Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
+
+# --- Phase 4: Executable for testing ---
+add_executable(Phase4Test src/cpp/main_phase4.cpp $<TARGET_OBJECTS:eos_v1_obj>)
+
+# Link necessary libraries (no stdc++fs for C++14)
+target_link_libraries(Phase4Test PRIVATE eos_fortran_core_obj)
+target_include_directories(Phase4Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
 
 # ------------------------------------------------------
 
