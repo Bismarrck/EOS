@@ -155,3 +155,30 @@ int EquationOfStateV1::computeTFD(double rho, double T, double& result_x, double
     }
     return istat_fortran;
 }
+
+int EquationOfStateV1::computeComplicatedEOS(
+    const std::vector<double>& params,
+    double rho, double T,
+    double& P, double& E, double& dPdT, double& dEdT, double& dPdrho) {
+
+    if (!tfd_data.initialized) {
+        std::cerr << "C++ Error: TFD data not initialized before calling computeComplicatedEOS." << std::endl;
+        return -1; // Indicate TFD not ready
+    }
+    if (params.empty()) {
+        std::cerr << "C++ Error: No parameters provided for computeComplicatedEOS." << std::endl;
+        return -2; // Indicate params not ready
+    }
+
+    int istat_fortran;
+    c_complicated_eos(params.data(), static_cast<int>(params.size()), rho, T,
+                      tfd_data.matrix_A.data(), tfd_data.N1_A, tfd_data.N2_A,
+                      tfd_data.matrix_B.data(), tfd_data.N1_B, tfd_data.N2_B,
+                      &P, &E, &dPdT, &dEdT, &dPdrho,
+                      &istat_fortran);
+
+    if (istat_fortran != 0) {
+        std::cerr << "C++ Error: c_complicated_eos failed. Fortran istat: " << istat_fortran << std::endl;
+    }
+    return istat_fortran;
+}

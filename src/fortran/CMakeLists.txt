@@ -2,7 +2,7 @@
 add_library(eos_fortran_core_obj OBJECT
         module_analytic_eos.f90
         module_global_controls.f90
-        # module_complicated_eos.f90  # Add when available
+        module_complicated_eos.f90
         module_tfd_eos.f90
         fortran_c_wrappers.f90
 )

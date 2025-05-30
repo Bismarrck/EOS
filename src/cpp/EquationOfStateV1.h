@@ -28,7 +28,6 @@ extern "C" {
                            int* istat_out); // Good practice to always have an istat
 }
 
-
 // Structure to hold TFD matrix data in C++
 struct TFDMatrices {
     std::vector<double> matrix_A; // Stored flat
@@ -41,6 +40,14 @@ struct TFDMatrices {
     // Example for matrix_A: A(row, col) = matrix_A[row * N2_A + col]
 };
 
+// New extern "C" for Complicated EOS
+extern "C" {
+    void c_complicated_eos(const double* params, int num_params, double rho, double T,
+                           const double* matrix_a_flat, int n1_a, int n2_a,
+                           const double* matrix_b_flat, int n1_b, int n2_b,
+                           double* P, double* E, double* dPdT, double* dEdT, double* dPdrho,
+                           int* istat_out);
+}
 
 
 class EquationOfStateV1 {
@@ -82,6 +89,12 @@ public:
     // This will evolve significantly into the main compute method
     int computeAirEOS(double rho, double T, double& P, double& E);
     int computeCarbonEOS(double rho, double T, double& P, double& E);
+
+    // --- Complicated EOS Computation Call (for testing Phase 3 directly) ---
+    // This will be part of the main `compute(eos_id, ...)` method in Phase 4.
+    int computeComplicatedEOS(const std::vector<double>& params, // Material-specific params
+                              double rho, double T,
+                              double& P, double& E, double& dPdT, double& dEdT, double& dPdrho);
 
     // --- Methods to be implemented in later phases ---
     // int initialize(const std::vector<int>& eos_id_list, const std::string& eos_data_dir);

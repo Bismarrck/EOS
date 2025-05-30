@@ -4,6 +4,7 @@ MODULE eos_c_wrappers
     USE module_analytic_eos       ! To access air_eos_2000, carbon_eos_2001
     USE module_global_controls    ! To access control variables
     USE module_tfd_eos            ! To access TFD
+    USE module_complicated_eos, ONLY: Complicated_EOS
     IMPLICIT NONE
 
 CONTAINS
@@ -134,6 +135,47 @@ CONTAINS
         ! interpret the contiguous memory using column-major order given the dimensions.
 
     END SUBROUTINE c_tfd_eos_compute
+
+    SUBROUTINE c_complicated_eos(params_c, num_params_c, rho_c, T_c, &
+            matrix_a_flat_c, N1_A_c, N2_A_c, &
+            matrix_b_flat_c, N1_B_c, N2_B_c, &
+            P_c, E_c, dPdT_c, dEdT_c, dPdrho_c, &
+            istat_out) &
+            BIND(C, name='c_complicated_eos')
+        !DEC$ ATTRIBUTES DLLEXPORT :: c_complicated_eos
+
+        ! Inputs
+        INTEGER(C_INT), VALUE, INTENT(IN) :: num_params_c
+        REAL(C_DOUBLE), DIMENSION(*), INTENT(IN) :: params_c ! Flat array of params
+        REAL(C_DOUBLE), VALUE, INTENT(IN) :: rho_c, T_c
+
+        INTEGER(C_INT), VALUE, INTENT(IN) :: N1_A_c, N2_A_c, N1_B_c, N2_B_c
+        REAL(C_DOUBLE), DIMENSION(*), INTENT(IN) :: matrix_a_flat_c
+        REAL(C_DOUBLE), DIMENSION(*), INTENT(IN) :: matrix_b_flat_c
+
+        ! Outputs
+        REAL(C_DOUBLE), INTENT(OUT) :: P_c, E_c, dPdT_c, dEdT_c, dPdrho_c
+        INTEGER(C_INT), INTENT(OUT) :: istat_out
+
+        ! Validate inputs before calling the main routine
+        IF (num_params_c <= 0 .OR. N1_A_c <= 0 .OR. N2_A_c <= 0 .OR. &
+                N1_B_c <= 0 .OR. N2_B_c <= 0 ) THEN
+            istat_out = 399 ! Invalid input to C wrapper
+            P_c = 0.0_C_DOUBLE; E_c = 0.0_C_DOUBLE; dPdT_c = 0.0_C_DOUBLE
+            dEdT_c = 0.0_C_DOUBLE; dPdrho_c = 0.0_C_DOUBLE
+            RETURN
+        END IF
+
+        CALL Complicated_EOS(params_c(1:num_params_c), num_params_c, rho_c, T_c, &
+                matrix_a_flat_c, N1_A_c, N2_A_c, & ! Pass flat C arrays directly
+                matrix_b_flat_c, N1_B_c, N2_B_c, &
+                P_c, E_c, dPdT_c, dEdT_c, dPdrho_c, &
+                istat_out)
+        ! The Complicated_EOS subroutine declares its array arguments (params_in, matrix_A_in, etc.)
+        ! with explicit dimensions. Fortran will correctly map the contiguous data from
+        ! params_c, matrix_a_flat_c, etc.
+
+    END SUBROUTINE c_complicated_eos
 
     ! --- (Optional) Wrappers for Global Control Variables (Getters) ---
     ! Example:
