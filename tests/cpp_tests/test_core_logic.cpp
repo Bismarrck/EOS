@@ -1,5 +1,5 @@
 // src/cpp/main_phase4.cpp
-#include "EquationOfStateV1.h" // Assuming EquationOfStateV1.h is in the same dir or include path set by CMake
+#include "../../src/cpp/EquationOfStateV1.h"
 #include <iostream>
 #include <iomanip>
 #include <vector>

@@ -1,5 +1,5 @@
 // src/cpp/main_phase5.cpp
-#include "EquationOfStateV1.h"
+#include "../../src/cpp/EquationOfStateV1.h"
 #include <iostream>
 #include <iomanip>
 #include <vector>
