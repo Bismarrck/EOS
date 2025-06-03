@@ -1,3 +1,24 @@
-#TYPE: COMPLICATED
-10.0 20.0 0.5 0.7
-30.0 40.0
+#TYPE: Complicated
+# This is a complicated EOS model for material 10000
+=================
+Material Parameters
+Version 1.0
+Date: 2023-01-01
+=================
+! Basic properties
+Key1 = 1.234D-3  # Density factor (Fortran D exponent)
+key2 = 5.678e2   # Temperature factor
+
+# Bulk modulus terms (example of multiple values for one key)
+Key3 = 10.0 20.0 30.0 # These are three separate values associated with Key3
+
+# Shear modulus terms (example with some comments)
+Key4 = 100.0 # G0
+       200.0 # G1, note: the current parser handles this as part of Key4 if on the same line after '='
+             # but NOT if "200.0" is on a new line without "Key4 =" again.
+             # The provided parser assumes all values for a key are on the same line as "key = ..."
+             # To handle values for a key spanning multiple physical lines without repeating "key =",
+             # the parser logic for key-value needs to be more stateful (e.g. track current key).
+             # For now, to make it work with current parser:
+             # Key4 = 100.0 200.0 300.0 # All on one line
+             # OR if you have key4_param1, key4_param2 etc. in expected_param_order
