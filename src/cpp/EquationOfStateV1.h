@@ -117,6 +117,13 @@ public:
 
     void free_resources(); // Renamed from free() to avoid conflict if any
 
+    // --- MPI Data Packing/Unpacking ---
+    // Calculates required buffer size, or packs data if buffer is provided.
+    int pack_data(char*& buffer, int& buffer_size) const; // Made const as it shouldn't change state
+
+    // Unpacks data from buffer and initializes the object.
+    int unpack_data(const char* buffer, int buffer_size);
+
 private:
     // --- Private Helper Methods ---
     // Helper to read a single matrix's data from an already open stream, given dimensions
@@ -145,6 +152,7 @@ private:
     std::map<int, AnalyticRegistryEntry> analytic_eos_registry_;
 
     bool tfd_use_ver1_setting_ = true; // C++ mirror of the Fortran control, default true
+    bool complicated_eos_use_old_cold_term_setting_ = false;
 };
 
 #endif // EQUATIONOFSTATEV1_H

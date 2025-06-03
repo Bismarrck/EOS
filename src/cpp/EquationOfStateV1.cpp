@@ -87,6 +87,7 @@ EquationOfStateV1::~EquationOfStateV1() {
 
 // --- Control Variable Management ---
 int EquationOfStateV1::setComplicatedEOSUseOldColdTerm(bool value) {
+    complicated_eos_use_old_cold_term_setting_ = value;
     int istat;
     c_set_complicated_eos_use_old_cold_term(value, &istat);
     if (istat != 0) {
@@ -96,12 +97,12 @@ int EquationOfStateV1::setComplicatedEOSUseOldColdTerm(bool value) {
 }
 
 int EquationOfStateV1::setUseTFDDataVer1(bool value) {
+    tfd_use_ver1_setting_ = value;
     int istat;
     c_set_use_tfd_data_ver1(value, &istat);
     if (istat != 0) {
         std::cerr << "C++ Error: Failed to set use_tfd_data_ver1. Fortran istat: " << istat << std::endl;
     }
-    tfd_use_ver1_setting_ = value;
     return istat;
 }
 
@@ -462,4 +463,242 @@ void EquationOfStateV1::free_resources() {
     tfd_data.matrix_B.clear();
     tfd_data.initialized = false;
     std::cout << "C++: EquationOfStateV1 resources freed." << std::endl;
+}
+
+
+// Helper for packing data into buffer and advancing offset
+template<typename T>
+void pack_item(char*& current_ptr, const T& item) {
+    std::memcpy(current_ptr, &item, sizeof(T));
+    current_ptr += sizeof(T);
+}
+
+template<typename T>
+void pack_vector_data(char*& current_ptr, const std::vector<T>& vec_data) {
+    if (!vec_data.empty()) {
+        std::memcpy(current_ptr, vec_data.data(), vec_data.size() * sizeof(T));
+        current_ptr += vec_data.size() * sizeof(T);
+    }
+}
+
+// Helper for unpacking data from buffer and advancing offset
+template<typename T>
+void unpack_item(const char*& current_ptr, T& item) {
+    std::memcpy(&item, current_ptr, sizeof(T));
+    current_ptr += sizeof(T);
+}
+
+template<typename T>
+void unpack_vector_data(const char*& current_ptr, std::vector<T>& vec_data, size_t num_elements) {
+    vec_data.resize(num_elements);
+    if (num_elements > 0) {
+        std::memcpy(vec_data.data(), current_ptr, num_elements * sizeof(T));
+        current_ptr += num_elements * sizeof(T);
+    }
+}
+
+
+int EquationOfStateV1::pack_data(char*& buffer, int& buffer_size) const {
+    // --- Calculate total size needed ---
+    int required_size = 0;
+    required_size += sizeof(tfd_use_ver1_setting_);
+    required_size += sizeof(complicated_eos_use_old_cold_term_setting_);
+
+    required_size += sizeof(tfd_data.N1);
+    required_size += sizeof(tfd_data.N2);
+    if (tfd_data.initialized) {
+        required_size += tfd_data.matrix_A.size() * sizeof(double);
+        required_size += tfd_data.matrix_B.size() * sizeof(double);
+    } else {
+        // If TFD not initialized, we still pack N1=0, N2=0. No matrix data.
+    }
+
+    required_size += sizeof(int); // For num_loaded_materials_
+    for (const auto& pair : loaded_materials_) {
+        const MaterialData& md = pair.second;
+        required_size += sizeof(md.eos_id_key);
+        required_size += sizeof(InternalEOSType); // Pack the enum value
+        required_size += sizeof(int); // For num_params
+        required_size += md.params.size() * sizeof(double);
+    }
+
+    // --- Mode 1: Calculate size only ---
+    if (buffer == nullptr) {
+        buffer_size = required_size;
+        return EOS_SUCCESS;
+    }
+
+    // --- Mode 2: Pack data if buffer is sufficient ---
+    if (buffer_size < required_size) {
+        std::cerr << "Pack Error: Provided buffer too small. Need " << required_size
+                  << ", got " << buffer_size << std::endl;
+        return -1; // Or a specific error code for buffer too small
+    }
+
+    char* current_ptr = buffer;
+
+    pack_item(current_ptr, tfd_use_ver1_setting_);
+    pack_item(current_ptr, complicated_eos_use_old_cold_term_setting_);
+
+    if (tfd_data.initialized) {
+        pack_item(current_ptr, tfd_data.N1);
+        pack_item(current_ptr, tfd_data.N2);
+        pack_vector_data(current_ptr, tfd_data.matrix_A);
+        pack_vector_data(current_ptr, tfd_data.matrix_B);
+    } else {
+        int zero_dim = 0;
+        pack_item(current_ptr, zero_dim); // N1 = 0
+        pack_item(current_ptr, zero_dim); // N2 = 0
+        // No matrix data to pack
+    }
+
+    int num_loaded = static_cast<int>(loaded_materials_.size());
+    pack_item(current_ptr, num_loaded);
+
+    for (const auto& pair : loaded_materials_) {
+        const MaterialData& md = pair.second;
+        pack_item(current_ptr, md.eos_id_key);
+        pack_item(current_ptr, md.internal_type); // Packing enum directly
+
+        int num_params = static_cast<int>(md.params.size());
+        pack_item(current_ptr, num_params);
+        pack_vector_data(current_ptr, md.params);
+    }
+
+    buffer_size = static_cast<int>(current_ptr - buffer); // Actual size used
+    if (buffer_size != required_size) {
+        // This should ideally not happen if logic is correct
+        std::cerr << "Pack Error: Mismatch in calculated vs packed size. Packed: " << buffer_size
+                  << ", Required: " << required_size << std::endl;
+        return -2; // Packing logic error
+    }
+
+    std::cout << "C++ (pack_data): Successfully packed " << buffer_size << " bytes." << std::endl;
+    return EOS_SUCCESS;
+}
+
+
+int EquationOfStateV1::unpack_data(const char* buffer, int buffer_size) {
+    // Clear existing state before unpacking
+    free_resources(); // Important to reset state
+
+    const char* current_ptr = buffer;
+    const char* buffer_end = buffer + buffer_size; // For boundary checks
+
+    // Helper lambda for boundary check
+    auto check_boundary = [&](size_t needed) -> bool {
+        if (current_ptr + needed > buffer_end) {
+            std::cerr << "Unpack Error: Buffer too small or data corrupted. "
+                      << "Attempting to read " << needed << " bytes with "
+                      << (buffer_end - current_ptr) << " bytes remaining." << std::endl;
+            return false;
+        }
+        return true;
+    };
+
+    if (!check_boundary(sizeof(tfd_use_ver1_setting_))) return -1;
+    unpack_item(current_ptr, tfd_use_ver1_setting_);
+
+    if (!check_boundary(sizeof(complicated_eos_use_old_cold_term_setting_))) return -1;
+    unpack_item(current_ptr, complicated_eos_use_old_cold_term_setting_);
+
+    // Update Fortran side with unpacked control variables
+    int f_istat;
+    c_set_use_tfd_data_ver1(tfd_use_ver1_setting_, &f_istat); // Error check f_istat?
+    c_set_complicated_eos_use_old_cold_term(complicated_eos_use_old_cold_term_setting_, &f_istat); // Error check?
+
+    std::cout << "C++ (unpack_data): Unpacked tfd_use_ver1_setting=" << tfd_use_ver1_setting_
+              << ", complicated_eos_use_old_cold_term_setting=" << complicated_eos_use_old_cold_term_setting_ << std::endl;
+
+
+    if (!check_boundary(sizeof(tfd_data.N1))) return -1;
+    unpack_item(current_ptr, tfd_data.N1);
+    if (!check_boundary(sizeof(tfd_data.N2))) return -1;
+    unpack_item(current_ptr, tfd_data.N2);
+
+    if (tfd_data.N1 > 0 && tfd_data.N2 > 0) { // Check if TFD data was actually packed
+        size_t tfd_a_bytes = static_cast<size_t>(tfd_data.N1) * tfd_data.N2 * sizeof(double);
+        if (!check_boundary(tfd_a_bytes)) return -1;
+        unpack_vector_data(current_ptr, tfd_data.matrix_A, static_cast<size_t>(tfd_data.N1) * tfd_data.N2);
+
+        size_t tfd_b_bytes = static_cast<size_t>(tfd_data.N1) * tfd_data.N2 * sizeof(double);
+        if (!check_boundary(tfd_b_bytes)) return -1;
+        unpack_vector_data(current_ptr, tfd_data.matrix_B, static_cast<size_t>(tfd_data.N1) * tfd_data.N2);
+        tfd_data.initialized = true;
+        std::cout << "C++ (unpack_data): Unpacked TFD matrices (" << tfd_data.N1 << "x" << tfd_data.N2 << ")." << std::endl;
+    } else {
+        tfd_data.initialized = false; // N1 or N2 was 0, so no TFD data
+        std::cout << "C++ (unpack_data): TFD dimensions were zero, no TFD matrices unpacked." << std::endl;
+    }
+
+
+    int num_loaded_materials;
+    if (!check_boundary(sizeof(num_loaded_materials))) return -1;
+    unpack_item(current_ptr, num_loaded_materials);
+    std::cout << "C++ (unpack_data): Expecting " << num_loaded_materials << " materials." << std::endl;
+
+    for (int i = 0; i < num_loaded_materials; ++i) {
+        MaterialData md;
+        if (!check_boundary(sizeof(md.eos_id_key))) return -1;
+        unpack_item(current_ptr, md.eos_id_key);
+
+        if (!check_boundary(sizeof(md.internal_type))) return -1;
+        unpack_item(current_ptr, md.internal_type); // Unpacking enum directly
+
+        int num_params;
+        if (!check_boundary(sizeof(num_params))) return -1;
+        unpack_item(current_ptr, num_params);
+
+        if (num_params > 0) {
+            size_t params_bytes = static_cast<size_t>(num_params) * sizeof(double);
+            if (!check_boundary(params_bytes)) return -1;
+            unpack_vector_data(current_ptr, md.params, num_params);
+        }
+
+        // Re-establish analytic_func pointer based on internal_type and eos_id_key
+        // This relies on analytic_eos_registry_ being populated (e.g. in constructor)
+        // Or, find it in the registry by the unpacked md.eos_id_key.
+        auto reg_it = analytic_eos_registry_.find(md.eos_id_key);
+        if (reg_it != analytic_eos_registry_.end()) {
+            // Cross-check if internal_type matches what's in registry for this ID
+            if (reg_it->second.internal_type == md.internal_type) {
+                md.analytic_func = reg_it->second.func_ptr;
+            } else {
+                 std::cerr << "Unpack Warning: Mismatch in unpacked internal_type for analytic EOS ID "
+                           << md.eos_id_key << ". Using registry's type." << std::endl;
+                 md.internal_type = reg_it->second.internal_type; // Prefer registry
+                 md.analytic_func = reg_it->second.func_ptr;
+            }
+        } else if (md.internal_type == InternalEOSType::ANALYTIC_AIR || md.internal_type == InternalEOSType::ANALYTIC_CARBON) {
+            // This case should ideally not happen if eos_id_key was used for registry lookup
+            std::cerr << "Unpack Error: Unpacked analytic EOS ID " << md.eos_id_key
+                      << " not found in registry, but type suggests it's analytic." << std::endl;
+            return -1; // Data integrity issue
+        }
+
+        // Set type_from_file based on internal_type (approximate reverse)
+        if (md.internal_type == InternalEOSType::ANALYTIC_AIR || md.internal_type == InternalEOSType::ANALYTIC_CARBON) {
+            md.type_from_file = EOSTypeFromFile::ANALYTIC;
+        } else if (md.internal_type == InternalEOSType::COMPLICATED_V1) {
+            md.type_from_file = EOSTypeFromFile::COMPLICATED;
+        } else {
+            md.type_from_file = EOSTypeFromFile::NOT_SET; // Or UNKNOWN
+        }
+
+        loaded_materials_[md.eos_id_key] = md;
+        std::cout << "C++ (unpack_data): Unpacked material ID " << md.eos_id_key
+                  << ", type " << static_cast<int>(md.internal_type)
+                  << ", num_params " << num_params << std::endl;
+    }
+
+    // Final check: did we consume the whole buffer?
+    if (current_ptr != buffer_end) {
+        std::cerr << "Unpack Warning: " << (buffer_end - current_ptr)
+                  << " bytes remaining in buffer after unpack. Expected to consume all "
+                  << buffer_size << " bytes." << std::endl;
+        // This might be an error depending on strictness.
+    }
+
+    std::cout << "C++ (unpack_data): Successfully unpacked data." << std::endl;
+    return EOS_SUCCESS;
 }

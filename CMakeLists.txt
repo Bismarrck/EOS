@@ -44,6 +44,14 @@ add_executable(Phase4Test src/cpp/main_phase4.cpp $<TARGET_OBJECTS:eos_v1_obj>)
 target_link_libraries(Phase4Test PRIVATE eos_fortran_core_obj)
 target_include_directories(Phase4Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
 
+# --- Phase 5: Executable for testing ---
+add_executable(Phase5Test src/cpp/main_phase5.cpp $<TARGET_OBJECTS:eos_v1_obj>)
+
+# Link necessary libraries (no stdc++fs for C++14)
+target_link_libraries(Phase5Test PRIVATE eos_fortran_core_obj)
+target_include_directories(Phase5Test PRIVATE ${PROJECT_SOURCE_DIR}/src/cpp)
+
+
 # ------------------------------------------------------
 
 # Optional: Add examples and tests later
