@@ -110,6 +110,9 @@ public:
     int setComplicatedEOSUseOldColdTerm(bool value);
     int setUseTFDDataVer1(bool value); // This will influence TFD file choice in initialize
 
+    // Main TFD loading function
+    int loadTFDDataInternal(const std::string& tfd_base_dir); // Takes base dir for TFD files
+
     // --- Computation ---
     int compute(int eos_id, double rho, double T,
                 double& P, double& E,
@@ -129,8 +132,6 @@ private:
     // Helper to read a single matrix's data from an already open stream, given dimensions
     static int read_matrix_values_from_stream(std::ifstream& infile, int N1, int N2,
                                               std::vector<double>& matrix_data, const std::string& matrix_name_for_error);
-    // Main TFD loading function
-    int loadTFDDataInternal(const std::string& tfd_base_dir); // Takes base dir for TFD files
 
     // C++ shim functions for specific analytic EOS, these call the extern "C" Fortran wrappers
     // They are bound to std::function in the MaterialData
