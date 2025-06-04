@@ -10,7 +10,7 @@ TEST_CASE("EquationOfStateV1 Core Logic Tests") {
     std::cout << "-------------------------" << std::endl;
 
     EquationOfStateV1 eos_manager;
-    std::string eos_data_path = "../../eos_data_dir";
+    std::string eos_data_path = "../../../eos_data_dir";
 
     // --- Test check_eos_data_dir ---
     SUBCASE("Check EOS Data Directory") {

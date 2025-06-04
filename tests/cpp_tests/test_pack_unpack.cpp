@@ -6,7 +6,7 @@
 
 TEST_CASE("EquationOfStateV1 Pack/Unpack Tests") {
     EquationOfStateV1 eos_manager_rank0;
-    std::string eos_data_path = "../../eos_data_dir"; // Adjust path
+    std::string eos_data_path = "../../../eos_data_dir"; // Adjust path
 
     INFO("Initializing EOS Manager on Rank 0 for Pack/Unpack Test");
     std::vector<int> eos_to_load = {1, 2, 10000};
