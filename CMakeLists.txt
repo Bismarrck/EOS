@@ -25,6 +25,14 @@ if(EOS_BUILD_TESTS)
     include_directories(SYSTEM ${THIRDPARTY_DIR}/doctest) # Corrected path
 endif()
 
+# --- BUILD: Python Interface ---
+option(EOS_BUILD_PYTHON_BINDINGS "Build Python bindings for EquationOfStateProject" ON)
+if(EOS_BUILD_PYTHON_BINDINGS)
+    find_package(PythonInterp REQUIRED)
+    add_subdirectory(${THIRDPARTY_DIR}/pybind11)
+    add_subdirectory(python)
+endif()
+
 # --- BUILD: Examples ---
 option(EOS_BUILD_EXAMPLES "Build example programs" ON)
 if(EOS_BUILD_EXAMPLES)
