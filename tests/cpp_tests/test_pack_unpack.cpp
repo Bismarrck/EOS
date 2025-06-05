@@ -1,4 +1,4 @@
-#include "include/doctest.h"
+#include "../../third_party/doctest/doctest.h"
 #include "../../src/cpp/EquationOfStateV1.h"
 #include <vector>
 #include <string>
