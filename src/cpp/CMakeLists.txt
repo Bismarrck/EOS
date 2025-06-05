@@ -3,6 +3,7 @@
 # Create a static library from EquationOfStateV1.cpp/.h
 add_library(EquationOfStateV1_lib STATIC
         EquationOfStateV1.cpp
+        eos_c_api.cpp
 )
 
 # Ensure EquationOfStateV1.h can be found by EquationOfStateV1.cpp
