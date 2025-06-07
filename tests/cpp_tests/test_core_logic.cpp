@@ -61,7 +61,7 @@ TEST_CASE("EquationOfStateV1 Core Logic Tests") {
         comp_stat = eos_manager.compute(10000, rho, T, P, E, dPdT, dEdT, dPdrho);
         CHECK(comp_stat == EOS_SUCCESS);
         // Add CHECKs for P, E, dPdT etc. based on your dummy TFD data and logic
-        // e.g. CHECK(P == doctest::Approx(19.98000));
+        CHECK(P == doctest::Approx(1.9822212));
     }
 
     SUBCASE("Initialize and Compute with TFD v2") {

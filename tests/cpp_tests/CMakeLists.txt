@@ -5,6 +5,7 @@ add_executable(eos_cpp_tests
         test_main.cpp
         test_core_logic.cpp
         test_pack_unpack.cpp
+        test_numerical_validation.cpp
 )
 
 # Link against the EquationOfStateV1 library and Fortran objects

@@ -1,0 +1,181 @@
+#include "../../third_party/doctest/doctest.h"
+#include <string>
+#include <vector>
+#include <fstream>
+#include <sstream>
+#include <iomanip> // For std::stod in a robust way if needed
+#include "EquationOfStateV1.h"
+#include "utils/string_utils.h"
+
+
+struct NumericalTestCase {
+    int eos_id;
+    double rho;
+    double T;
+    double ref_P;
+    double ref_E;
+    double ref_dPdT;
+    double ref_dEdT;
+    double ref_dPdrho;
+    std::string description;
+    int line_num; // For error reporting
+
+    // Optional: Add a flag for which TFD version this reference data corresponds to
+    // bool use_tfd_v1_for_reference;
+};
+
+
+// Function to load test cases from a CSV file
+// (Simplified CSV parsing, assumes no commas within fields, handles '#' comments)
+std::vector<NumericalTestCase> load_numerical_test_cases(const std::string& filepath) {
+    std::vector<NumericalTestCase> cases;
+    std::ifstream file(filepath.c_str());
+    std::string line;
+    int current_line_num = 0;
+
+    if (!file.is_open()) {
+        FAIL("Failed to open reference data file: " << filepath); // doctest FAIL
+        return cases; // Return empty
+    }
+
+    // Skip header line if present (optional, can be adapted)
+    std::getline(file, line);
+    current_line_num++;
+
+    while (std::getline(file, line)) {
+        current_line_num++;
+        std::string processed_line = line;
+        size_t comment_pos = processed_line.find('#');
+        if (comment_pos != std::string::npos) {
+            processed_line = processed_line.substr(0, comment_pos);
+        }
+        processed_line = EOSUtils::trim_string(processed_line); // Use trim_string from EquationOfStateV1.cpp context
+
+        if (processed_line.empty()) continue;
+
+        std::stringstream ss(processed_line);
+        std::string field;
+        NumericalTestCase tc;
+        tc.line_num = current_line_num;
+
+        try {
+            // eos_id
+            if (!std::getline(ss, field, ',')) throw std::runtime_error("Missing eos_id");
+            tc.eos_id = std::stoi(EOSUtils::trim_string(field));
+            // rho
+            if (!std::getline(ss, field, ',')) throw std::runtime_error("Missing rho");
+            EOSUtils::string_to_double_fortran_compat(EOSUtils::trim_string(field), tc.rho); // Use our D-exponent aware converter
+            // T
+            if (!std::getline(ss, field, ',')) throw std::runtime_error("Missing T");
+            EOSUtils::string_to_double_fortran_compat(EOSUtils::trim_string(field), tc.T);
+            // ref_P
+            if (!std::getline(ss, field, ',')) throw std::runtime_error("Missing ref_P");
+            EOSUtils::string_to_double_fortran_compat(EOSUtils::trim_string(field), tc.ref_P);
+            // ref_E
+            if (!std::getline(ss, field, ',')) throw std::runtime_error("Missing ref_E");
+            EOSUtils::string_to_double_fortran_compat(EOSUtils::trim_string(field), tc.ref_E);
+            // ref_dPdT
+            if (!std::getline(ss, field, ',')) throw std::runtime_error("Missing ref_dPdT");
+            EOSUtils::string_to_double_fortran_compat(EOSUtils::trim_string(field), tc.ref_dPdT);
+            // ref_dEdT
+            if (!std::getline(ss, field, ',')) throw std::runtime_error("Missing ref_dEdT");
+            EOSUtils::string_to_double_fortran_compat(EOSUtils::trim_string(field), tc.ref_dEdT);
+            // ref_dPdrho
+            if (!std::getline(ss, field, ',')) throw std::runtime_error("Missing ref_dPdrho");
+            EOSUtils::string_to_double_fortran_compat(EOSUtils::trim_string(field), tc.ref_dPdrho);
+            // description (optional, rest of the line)
+            if (std::getline(ss, field, ',')) { // if there's more after dPdrho
+                 tc.description = EOSUtils::trim_string(field);
+            } else {
+                 tc.description = "N/A";
+            }
+
+            cases.push_back(tc);
+        } catch (const std::exception& e) {
+            FAIL_CHECK("Error parsing reference data file " << filepath << " at line " << current_line_num
+                       << ": " << e.what() << " on content: \"" << processed_line << "\"");
+        }
+    }
+    return cases;
+}
+
+
+TEST_CASE("Numerical Validation from Reference Data") {
+    INFO("Starting Numerical Validation Test Case");
+
+    // Path to reference data. Adjust relative to CTest execution directory.
+    std::string ref_data_filepath = "../../../tests/test_data/reference_eos_data.csv";
+    std::vector<NumericalTestCase> test_cases = load_numerical_test_cases(ref_data_filepath);
+    REQUIRE_FALSE(test_cases.empty()); // Fail if no test cases were loaded
+
+    // EOS Manager setup (assuming eos_data_dir is needed for initialize)
+    // Path to the actual eos_data_dir used by EquationOfStateV1
+    std::string eos_data_path = "../../../eos_data_dir";
+
+    EquationOfStateV1 eos_manager;
+
+    // We need to initialize the eos_manager with all unique eos_ids found in test_cases.
+    std::vector<int> all_eos_ids_to_init;
+    std::map<int, bool> unique_ids; // Using map for uniqueness
+    for (const auto& tc : test_cases) {
+        unique_ids[tc.eos_id] = true;
+    }
+    for (const auto& pair : unique_ids) {
+        all_eos_ids_to_init.push_back(pair.first);
+    }
+
+    INFO("Initializing EOS manager for numerical tests with EOS IDs: (listing IDs)");
+    // for(int id : all_eos_ids_to_init) INFO("  ID: " << id); // Can be verbose
+
+    int init_stat = eos_manager.initialize(all_eos_ids_to_init, eos_data_path);
+    // If initialization fails for ANY required ID, this test case is compromised.
+    // However, individual test points might still be runnable if their specific EOS ID was loaded.
+    // For simplicity, require full initialization success for all needed IDs.
+    REQUIRE_MESSAGE(init_stat == EOS_SUCCESS, "EOS Manager initialization failed with code: " << init_stat);
+
+    // Define a tolerance for floating point comparisons
+    const double rel_tolerance = 1e-7; // Relative tolerance
+    const double abs_tolerance = 1e-9; // Absolute tolerance for values near zero
+
+    for (const auto& tc : test_cases) {
+        SUBCASE((tc.description.empty() ? "EOSID " + std::to_string(tc.eos_id) + " Line " + std::to_string(tc.line_num) : tc.description.c_str()).data()) {
+            INFO("Test Case: " << (tc.description.empty() ? "Line " + std::to_string(tc.line_num) : tc.description));
+            INFO("  Input: eos_id=" << tc.eos_id << ", rho=" << tc.rho << ", T=" << tc.T);
+            INFO("  Reference: P=" << tc.ref_P << ", E=" << tc.ref_E /* << other refs */);
+
+            double P_calc, E_calc, dPdT_calc, dEdT_calc, dPdrho_calc;
+            int compute_stat = eos_manager.compute(tc.eos_id, tc.rho, tc.T,
+                                                   P_calc, E_calc,
+                                                   dPdT_calc, dEdT_calc, dPdrho_calc);
+            REQUIRE(compute_stat == EOS_SUCCESS);
+
+            // Compare calculated values with reference values
+            // Using doctest::Approx with relative and absolute epsilon might be better.
+            // Custom check for better messages:
+            auto check_approx_equal = [&](double val_calc, double val_ref, const std::string& name) {
+                if (std::abs(val_ref) > abs_tolerance * 1000) { // If ref value is not too small, relative makes sense
+                    REQUIRE_MESSAGE(std::abs(val_calc - val_ref) <= rel_tolerance * std::abs(val_ref),
+                                   name << ": Calc=" << val_calc << ", Ref=" << val_ref << ", RelDiff="
+                                   << (std::abs(val_ref) > 0 ? std::abs(val_calc - val_ref) / std::abs(val_ref) : 0.0) );
+                } else { // For small ref values, absolute tolerance is more robust
+                     REQUIRE_MESSAGE(std::abs(val_calc - val_ref) <= abs_tolerance,
+                                   name << ": Calc=" << val_calc << ", Ref=" << val_ref << ", AbsDiff="
+                                   << std::abs(val_calc - val_ref));
+                }
+            };
+
+            // Using doctest::Approx is cleaner:
+            // Example: REQUIRE(P_calc == doctest::Approx(tc.ref_P).epsilon(rel_tolerance)); // This is relative only
+            // For combined relative/absolute, manual check or a custom Approx:
+            // auto custom_approx = [](double val_ref) {
+            //     return doctest::Approx(val_ref).epsilon(rel_tolerance) || doctest::Approx(val_ref).scale(abs_tolerance);
+            // }; This doesn't quite work as Approx is stateful.
+
+            check_approx_equal(P_calc, tc.ref_P, "P");
+            check_approx_equal(E_calc, tc.ref_E, "E");
+            check_approx_equal(dPdT_calc, tc.ref_dPdT, "dPdT");
+            check_approx_equal(dEdT_calc, tc.ref_dEdT, "dEdT");
+            check_approx_equal(dPdrho_calc, tc.ref_dPdrho, "dPdrho");
+        }
+    }
+}

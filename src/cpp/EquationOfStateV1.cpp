@@ -6,8 +6,7 @@
 #include <iomanip>      // For std::fixed, std::setprecision in main, can be useful here too
 #include <algorithm> // For std::transform for string tolower
 #include <string>
-#include <algorithm> // For std::replace, std::transform
-#include <stdexcept> // For std::stod exceptions
+#include "utils/string_utils.h"
 
 
 // Helper for basic path joining (add to EquationOfStateV1.cpp or a common utils file)
@@ -49,37 +48,6 @@ static std::string get_eos_file_path(const std::string& base_dir, int eos_id_ful
     return path;
 }
 
-// Converts a string potentially containing Fortran 'D' exponent to double
-static bool string_to_double_fortran_compat(const std::string& s, double& out_val) {
-    if (s.empty()) {
-        return false;
-    }
-    std::string temp_s = s;
-    // Replace 'D' or 'd' with 'E' for exponent
-    std::replace(temp_s.begin(), temp_s.end(), 'D', 'E');
-    std::replace(temp_s.begin(), temp_s.end(), 'd', 'E');
-    try {
-        out_val = std::stod(temp_s);
-        return true;
-    } catch (const std::invalid_argument& ia) {
-        std::cerr << "Error (string_to_double): Invalid argument: '" << s << "' (processed as '" << temp_s << "')" << std::endl;
-        return false;
-    } catch (const std::out_of_range& oor) {
-        std::cerr << "Error (string_to_double): Out of range: '" << s << "' (processed as '" << temp_s << "')" << std::endl;
-        return false;
-    }
-}
-
-static std::string trim_string(const std::string& str) {
-    const std::string whitespace = " \t\n\r\f\v";
-    size_t start = str.find_first_not_of(whitespace);
-    if (start == std::string::npos) return ""; // empty or all whitespace
-    size_t end = str.find_last_not_of(whitespace);
-    return str.substr(start, end - start + 1);
-}
-
-// In EquationOfStateV1.cpp
-
 static int parse_complicated_eos_params(std::ifstream& eos_file,
                                         const std::string& file_path_for_error,
                                         const std::vector<std::string>& param_order,
@@ -101,7 +69,7 @@ static int parse_complicated_eos_params(std::ifstream& eos_file,
         if (comment_char_pos != std::string::npos) {
             processed_line = processed_line.substr(0, comment_char_pos);
         }
-        processed_line = trim_string(processed_line);
+        processed_line = EOSUtils::trim_string(processed_line);
 
         if (processed_line.empty()) {
             // An empty line usually resets the "current_active_key" for continuations,
@@ -127,8 +95,8 @@ static int parse_complicated_eos_params(std::ifstream& eos_file,
         std::string value_part = "";
 
         if (eq_pos != std::string::npos) { // This line defines a new key or redefines one
-            key_part = trim_string(processed_line.substr(0, eq_pos));
-            value_part = trim_string(processed_line.substr(eq_pos + 1));
+            key_part = EOSUtils::trim_string(processed_line.substr(0, eq_pos));
+            value_part =EOSUtils:: trim_string(processed_line.substr(eq_pos + 1));
 
             if (key_part.empty()) {
                 std::cerr << "Error (" << file_path_for_error << ":" << line_number
@@ -165,7 +133,7 @@ static int parse_complicated_eos_params(std::ifstream& eos_file,
             bool values_found_on_this_line = false;
             while (val_ss >> token) {
                 double val_converted;
-                if (!string_to_double_fortran_compat(token, val_converted)) {
+                if (!EOSUtils::string_to_double_fortran_compat(token, val_converted)) {
                     std::cerr << "Error (" << file_path_for_error << ":" << line_number
                               << "): Failed to convert value token '" << token << "' for key '" << current_active_key << "'" << std::endl;
                     return EOS_ERROR_FILE_PARSE;
@@ -303,7 +271,7 @@ int EquationOfStateV1::read_matrix_values_from_stream(std::ifstream& infile, int
         std::istringstream val_ss(line_content);
         while (val_ss >> token) {
             double value_converted;
-            if (!string_to_double_fortran_compat(token, value_converted)) {
+            if (!EOSUtils::string_to_double_fortran_compat(token, value_converted)) {
                 std::cerr << "Error: Failed to convert token '" << token << "' to double for " << matrix_name_for_error << std::endl;
                 return EOS_ERROR_FILE_PARSE;
             }
