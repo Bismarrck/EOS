@@ -4,6 +4,7 @@
 add_library(EquationOfStateV1_lib STATIC
         EquationOfStateV1.cpp
         eos_c_api.cpp
+        utils/string_utils.cpp
 )
 
 # Ensure EquationOfStateV1.h can be found by EquationOfStateV1.cpp
@@ -11,4 +12,5 @@ add_library(EquationOfStateV1_lib STATIC
 target_include_directories(EquationOfStateV1_lib
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR} # For EquationOfStateV1.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/utils
 )
