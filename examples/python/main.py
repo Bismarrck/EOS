@@ -4,12 +4,6 @@ import os
 import platform
 
 # --- Helper to find the compiled PyEOS module ---
-# This is often tricky depending on CMake build structure and where you run the script.
-# Option 1: Run this script from the directory containing PyEOS.pyd/so
-# Option 2: Add the build directory to sys.path
-# Assumes the script is run from EquationOfStateProject/examples/python_example/
-# and the module is in EquationOfStateProject/build/python/
-# Adjust relative_build_path as needed for your CMake output structure.
 
 # Determine the build directory path relative to this script's location
 script_dir = os.path.dirname(os.path.abspath(__file__))

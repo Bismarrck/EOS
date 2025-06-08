@@ -20,8 +20,8 @@ struct NumericalTestCase {
     std::string description;
     int line_num; // For error reporting
 
-    // Optional: Add a flag for which TFD version this reference data corresponds to
-    // bool use_tfd_v1_for_reference;
+    // Configuration for this test
+    bool use_tfd_v1_for_ref = true;
 };
 
 
@@ -89,6 +89,13 @@ std::vector<NumericalTestCase> load_numerical_test_cases(const std::string& file
             } else {
                  tc.description = "N/A";
             }
+            if (std::getline(ss, field, ',')) {
+                std::string tfd_v1_str = EOSUtils::trim_string(field);
+                std::transform(tfd_v1_str.begin(), tfd_v1_str.end(), tfd_v1_str.begin(), ::tolower);
+                if (tfd_v1_str == "false" || tfd_v1_str == "0") tc.use_tfd_v1_for_ref = false;
+                else if (tfd_v1_str == "true" || tfd_v1_str == "1" || tfd_v1_str.empty()) tc.use_tfd_v1_for_ref = true;
+                else INFO("Warning: Unrecognized value for use_tfd_v1 '" << field << "', defaulting to true.");
+            }
 
             cases.push_back(tc);
         } catch (const std::exception& e) {
@@ -108,6 +115,12 @@ TEST_CASE("Numerical Validation from Reference Data") {
     std::vector<NumericalTestCase> test_cases = load_numerical_test_cases(ref_data_filepath);
     REQUIRE_FALSE(test_cases.empty()); // Fail if no test cases were loaded
 
+    // Group test cases by their required TFD version setting
+    std::map<bool, std::vector<NumericalTestCase>> grouped_cases;
+    for (const auto& tc : test_cases) {
+        grouped_cases[tc.use_tfd_v1_for_ref].push_back(tc);
+    }
+
     // EOS Manager setup (assuming eos_data_dir is needed for initialize)
     // Path to the actual eos_data_dir used by EquationOfStateV1
     std::string eos_data_path = "../../../eos_data_dir";
@@ -125,57 +138,85 @@ TEST_CASE("Numerical Validation from Reference Data") {
     }
 
     INFO("Initializing EOS manager for numerical tests with EOS IDs: (listing IDs)");
-    // for(int id : all_eos_ids_to_init) INFO("  ID: " << id); // Can be verbose
+    for(int id : all_eos_ids_to_init) INFO("  ID: " << id); // Can be verbose
 
     int init_stat = eos_manager.initialize(all_eos_ids_to_init, eos_data_path);
-    // If initialization fails for ANY required ID, this test case is compromised.
-    // However, individual test points might still be runnable if their specific EOS ID was loaded.
-    // For simplicity, require full initialization success for all needed IDs.
     REQUIRE_MESSAGE(init_stat == EOS_SUCCESS, "EOS Manager initialization failed with code: " << init_stat);
 
     // Define a tolerance for floating point comparisons
     const double rel_tolerance = 1e-7; // Relative tolerance
     const double abs_tolerance = 1e-9; // Absolute tolerance for values near zero
 
-    for (const auto& tc : test_cases) {
-        SUBCASE((tc.description.empty() ? "EOSID " + std::to_string(tc.eos_id) + " Line " + std::to_string(tc.line_num) : tc.description.c_str()).data()) {
-            INFO("Test Case: " << (tc.description.empty() ? "Line " + std::to_string(tc.line_num) : tc.description));
-            INFO("  Input: eos_id=" << tc.eos_id << ", rho=" << tc.rho << ", T=" << tc.T);
-            INFO("  Reference: P=" << tc.ref_P << ", E=" << tc.ref_E /* << other refs */);
+    for (auto const& group: grouped_cases) {
+        bool use_v1 = group.first;
+        auto case_group = group.second;
 
-            double P_calc, E_calc, dPdT_calc, dEdT_calc, dPdrho_calc;
-            int compute_stat = eos_manager.compute(tc.eos_id, tc.rho, tc.T,
-                                                   P_calc, E_calc,
-                                                   dPdT_calc, dEdT_calc, dPdrho_calc);
-            REQUIRE(compute_stat == EOS_SUCCESS);
+        MESSAGE("Testing with TFD Configuration: use_tfd_v1 = " << (use_v1 ? "true" : "false"));
+        if (case_group.empty()) continue;
 
-            // Compare calculated values with reference values
-            // Using doctest::Approx with relative and absolute epsilon might be better.
-            // Custom check for better messages:
-            auto check_approx_equal = [&](double val_calc, double val_ref, const std::string& name) {
-                if (std::abs(val_ref) > abs_tolerance * 1000) { // If ref value is not too small, relative makes sense
-                    REQUIRE_MESSAGE(std::abs(val_calc - val_ref) <= rel_tolerance * std::abs(val_ref),
-                                   name << ": Calc=" << val_calc << ", Ref=" << val_ref << ", RelDiff="
-                                   << (std::abs(val_ref) > 0 ? std::abs(val_calc - val_ref) / std::abs(val_ref) : 0.0) );
-                } else { // For small ref values, absolute tolerance is more robust
-                     REQUIRE_MESSAGE(std::abs(val_calc - val_ref) <= abs_tolerance,
-                                   name << ": Calc=" << val_calc << ", Ref=" << val_ref << ", AbsDiff="
-                                   << std::abs(val_calc - val_ref));
-                }
-            };
+        EquationOfStateV1 eos_manager;
+        eos_manager.setUseTFDDataVer1(use_v1); // Set TFD version for this group
 
-            // Using doctest::Approx is cleaner:
-            // Example: REQUIRE(P_calc == doctest::Approx(tc.ref_P).epsilon(rel_tolerance)); // This is relative only
-            // For combined relative/absolute, manual check or a custom Approx:
-            // auto custom_approx = [](double val_ref) {
-            //     return doctest::Approx(val_ref).epsilon(rel_tolerance) || doctest::Approx(val_ref).scale(abs_tolerance);
-            // }; This doesn't quite work as Approx is stateful.
+        std::vector<int> ids_for_this_group;
+        std::map<int, bool> unique_ids_in_group;
+        for (const auto& tc : case_group) {
+            unique_ids_in_group[tc.eos_id] = true;
+        }
+        for (const auto& pair : unique_ids_in_group) {
+            ids_for_this_group.push_back(pair.first);
+        }
 
-            check_approx_equal(P_calc, tc.ref_P, "P");
-            check_approx_equal(E_calc, tc.ref_E, "E");
-            check_approx_equal(dPdT_calc, tc.ref_dPdT, "dPdT");
-            check_approx_equal(dEdT_calc, tc.ref_dEdT, "dEdT");
-            check_approx_equal(dPdrho_calc, tc.ref_dPdrho, "dPdrho");
+        INFO("Initializing EOS manager for TFD config use_v1=" << use_v1
+            << " with EOS IDs (count: " << ids_for_this_group.size() << ")");
+
+        int init_stat = eos_manager.initialize(ids_for_this_group, eos_data_path);
+        REQUIRE_MESSAGE(init_stat == EOS_SUCCESS,
+            "EOS Manager initialization failed for TFD config use_v1=" << use_v1 << " with code: " << init_stat);
+
+        for (const auto& tc : case_group) {
+            // Create a unique subcase name
+            std::string subcase_name = tc.description;
+            if (subcase_name.empty() || subcase_name == "N/A") {
+                subcase_name = "EOSID_" + std::to_string(tc.eos_id) +
+                               "_rho_" + std::to_string(tc.rho) + // Potentially long names
+                               "_T_" + std::to_string(tc.T);
+            }
+            subcase_name += (use_v1 ? "_TFDv1" : "_TFDv2");
+
+            SUBCASE(subcase_name.c_str()) {
+               INFO("Test Case: " << (tc.description.empty() ? "Line " + std::to_string(tc.line_num) : tc.description));
+               INFO("  Input: eos_id=" << tc.eos_id << ", rho=" << tc.rho << ", T=" << tc.T);
+               INFO("  Reference: P=" << tc.ref_P << ", E=" << tc.ref_E /* << other refs */);
+
+               double P_calc, E_calc, dPdT_calc, dEdT_calc, dPdrho_calc;
+               int compute_stat = eos_manager.compute(tc.eos_id, tc.rho, tc.T,
+                                                      P_calc, E_calc,
+                                                      dPdT_calc, dEdT_calc, dPdrho_calc);
+               REQUIRE(compute_stat == EOS_SUCCESS);
+
+               // Compare calculated values with reference values
+               // Using doctest::Approx with relative and absolute epsilon might be better.
+               auto check_approx_equal = [&](double val_calc, double val_ref, const std::string &name) {
+                   if (std::abs(val_ref) > abs_tolerance * 1000) {
+                       // If ref value is not too small, relative makes sense
+                       REQUIRE_MESSAGE(std::abs(val_calc - val_ref) <= rel_tolerance * std::abs(val_ref),
+                                       name << ": Calc=" << val_calc << ", Ref=" << val_ref << ", RelDiff="
+                                       << (std::abs(val_ref) > 0 ? std::abs(val_calc - val_ref) / std::abs(val_ref) :
+                                           0.0));
+                   } else {
+                       // For small ref values, absolute tolerance is more robust
+                       REQUIRE_MESSAGE(std::abs(val_calc - val_ref) <= abs_tolerance,
+                                       name << ": Calc=" << val_calc << ", Ref=" << val_ref << ", AbsDiff="
+                                       << std::abs(val_calc - val_ref));
+                   }
+               };
+
+               check_approx_equal(P_calc, tc.ref_P, "P");
+               check_approx_equal(E_calc, tc.ref_E, "E");
+               check_approx_equal(dPdT_calc, tc.ref_dPdT, "dPdT");
+               check_approx_equal(dEdT_calc, tc.ref_dEdT, "dEdT");
+               check_approx_equal(dPdrho_calc, tc.ref_dPdrho, "dPdrho");
+            }
         }
     }
 }
