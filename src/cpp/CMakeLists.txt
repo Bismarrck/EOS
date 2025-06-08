@@ -15,6 +15,19 @@ set_target_properties(EquationOfStateV1_lib PROPERTIES
 # and by consumers of this library (like tests)
 target_include_directories(EquationOfStateV1_lib
         PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR} # For EquationOfStateV1.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/utils
+        # For builds within this project (e.g., EOSCore linking EquationOfStateV1_lib)
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils>
+        $<INSTALL_INTERFACE:include/EOSCore> # This path is relative to CMAKE_INSTALL_PREFIX
+)
+
+# Install EquationOfStateV1_lib and add it to the EOSCoreTargets export set
+# This assumes CMAKE_INSTALL_LIBDIR is defined (e.g., by include(GNUInstallDirs) in root)
+install(TARGETS EquationOfStateV1_lib
+        EXPORT EOSCoreTargets # Same export set as EOSCore
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT DevelopmentLibraries
+        # For static libs, ARCHIVE is the primary output.
+        # PUBLIC_HEADER can also be specified here if its headers are distinct and need different install rules
+        # PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/EquationOfStateV1_lib COMPONENT DevelopmentHeaders
+        # But since its headers are already installed via root for EOSCore, this might be redundant.
 )

@@ -67,59 +67,51 @@ jobs:
       # --- Test Installed Components ---
       # Option 1: Re-configure and build examples against installed library
       # This is more robust as it simulates an external project using find_package (if set up)
-
       - name: Configure C++ Example against Installed Library
-        # This assumes your library installs a YourLibConfig.cmake for find_package
-        # If not, you'd manually set CMAKE_PREFIX_PATH or hints for find_library/find_path
         run: |
-          cmake -S ${{ github.workspace }}/examples/cpp_example \
-                -B ${{ github.workspace }}/build_example_cpp \
-                -G "Ninja" \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install_dir \
-                -DCMAKE_PREFIX_PATH=${{ github.workspace }}/install_dir 
-                # CMAKE_PREFIX_PATH helps find_package find the installed EOSCoreConfig.cmake
+          cmake -S ${{ github.workspace }}/examples/cpp \
+              -B ${{ github.workspace }}/build_example_cpp \
+              -G "Ninja" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_PREFIX_PATH=${{ github.workspace }}/install_dir # Crucial for find_package
 
       - name: Build C++ Example against Installed Library
         run: cmake --build ${{ github.workspace }}/build_example_cpp --config Release
 
       - name: Run C++ Example
-        run: ${{ github.workspace }}/build_example_cpp/CppEOSDemo # Adjust executable name if different
+        # Pass the data dir path to the example
+        run: ${{ github.workspace }}/build_example_cpp/CppEOSDemo ${{ github.workspace }}/eos_data_dir
 
       # Test Fortran Example (similar approach, might need Fortran module path adjustments)
       - name: Configure Fortran Example against Installed Library
         run: |
-          cmake -S ${{ github.workspace }}/examples/fortran_example \
+          cmake -S ${{ github.workspace }}/examples/fortran \
                 -B ${{ github.workspace }}/build_example_fortran \
                 -G "Ninja" \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_PREFIX_PATH=${{ github.workspace }}/install_dir
-                # Ensure Fortran example's CMakeLists.txt uses find_package or similar for EOSCore
-                # and correctly finds the Fortran interface module if needed from source or installed location.
-                # Usually, the Fortran example includes module_eos_fortran_interface.f90 source directly
-                # and links against the installed C++ library (EOSCore).
+                -DCMAKE_PREFIX_PATH=${{ github.workspace }}/install_dir \
+                -DCMAKE_PROJECT_SOURCE_DIR=${{ github.workspace }} # To help find module_eos_fortran_interface.f90
 
       - name: Build Fortran Example against Installed Library
         run: cmake --build ${{ github.workspace }}/build_example_fortran --config Release
 
       - name: Run Fortran Example
-        run: ${{ github.workspace }}/build_example_fortran/FortranEOSDemo # Adjust executable name
+        working-directory: ${{ github.workspace }}/build_example_fortran
+        run: ./FortranEOSDemo # Assumes main.f90 data_dir path is now relative to where this runs
 
       # Test Python Module Import and Basic Usage from installed location
-      - name: Test Installed Python Module
+      - name: Test Installed Python Module (Basic Import & Run Demo)
         env:
-          # The Python module (PyEOS.so) should be installed to a known path by `cmake --install`
-          # e.g., ${{ github.workspace }}/install_dir/lib/python_packages/PyEOS/PyEOS.cpython-XYZ.so
-          # Adjust PYTHONPATH to include the parent directory of 'PyEOS' module directory
+          # Adjust this path based on where `install(TARGETS PyEOS ...)` puts the module
           PYTHONPATH: ${{ github.workspace }}/install_dir/lib/python_packages
-          # (The exact path depends on your `install(TARGETS PyEOS ...)` destination in python/CMakeLists.txt)
         run: |
           echo "PYTHONPATH set to: $PYTHONPATH"
-          python3 -c "import PyEOS; print('Successfully imported PyEOS from installed location!'); print(dir(PyEOS)); eos = PyEOS.EquationOfState(); print('Created PyEOS.EquationOfState instance.')"
-          # You can run your examples/python_example/run_eos_demo.py here too if it uses installed module
-          # python3 ${{ github.workspace }}/examples/python_example/run_eos_demo.py
+          python3 -c "import PyEOS; print('Successfully imported PyEOS from installed location!'); eos = PyEOS.EquationOfState(); print('Created PyEOS.EquationOfState instance.')"
+          echo "Running Python Demo Script:"
+          # Assume run_eos_demo.py is in examples/python
+          python3 ${{ github.workspace }}/examples/python_example/run_eos_demo.py ${{ github.workspace }}/eos_data_dir
 
-      # (Optional) Run Python numerical tests against installed module if they are separate
+      # Python Numerical Tests (as before, relies on PYTHONPATH to find installed PyEOS)
       - name: Run Python Numerical Tests against Installed Module
         env:
           PYTHONPATH: ${{ github.workspace }}/install_dir/lib/python_packages
