@@ -6,7 +6,6 @@
   #include <EOSCore/EquationOfStateV1.h> // For installed package
   #include <EOSCore/string_utils.h>
 #endif
-#include <string_utils.h>    // If string_utils.h is also public/installed
 #include <iostream>
 #include <vector>
 #include <string>
