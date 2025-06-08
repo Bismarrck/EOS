@@ -19,3 +19,4 @@ target_link_libraries(eos_cpp_tests PRIVATE
 
 # Add test to CTest
 add_test(NAME EosCppTests COMMAND eos_cpp_tests)
+set_tests_properties(EosCppTests PROPERTIES LABELS "cpp")

@@ -10,3 +10,4 @@ target_link_libraries(FortranNumericalTest PRIVATE
 )
 
 add_test(NAME EosFortranNumericalTest COMMAND FortranNumericalTest)
+set_tests_properties(EosFortranNumericalTest PROPERTIES LABELS "fortran")
