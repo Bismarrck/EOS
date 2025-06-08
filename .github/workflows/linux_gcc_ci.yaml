@@ -106,7 +106,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/install_dir/lib/python_packages
         run: |
           echo "PYTHONPATH set to: $PYTHONPATH"
-          python3 -c "import PyEOS; print('Successfully imported PyEOS from installed location!'); eos = PyEOS.EquationOfState(); print('Created PyEOS.EquationOfState instance.')"
+          python3 -c "import PyEOS; print('Successfully imported PyEOS from installed location!'); print('--- dir(PyEOS) ---'); print(dir(PyEOS)); print('--- End dir(PyEOS) ---'); Deos = PyEOS.EquationOfState(); print('Created PyEOS.EquationOfState instance.')"
           echo "Running Python Demo Script:"
           # Assume run_eos_demo.py is in examples/python
           python3 ${{ github.workspace }}/examples/python_example/run_eos_demo.py ${{ github.workspace }}/eos_data_dir
