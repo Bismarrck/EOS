@@ -6,6 +6,7 @@
 #include <iomanip>      // For std::fixed, std::setprecision in main, can be useful here too
 #include <algorithm> // For std::transform for string tolower
 #include <string>
+#include <functional>
 #include "utils/string_utils.h"
 
 
