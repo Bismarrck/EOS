@@ -15,7 +15,7 @@ if(PYTEST_EXECUTABLE)
     )
     # You might need to set PYTHONPATH if PyEOS isn't installed system-wide
     # set_property(TEST EosPytestNumerical PROPERTY ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python")
-    set_tests_properties(EosPythonNumericalTest PROPERTIES LABELS "python_build_tree")
+    set_tests_properties(EosPytestNumerical PROPERTIES LABELS "python_build_tree")
 else()
     message(STATUS "pytest not found, skipping pytest-based Python tests.")
 endif()
