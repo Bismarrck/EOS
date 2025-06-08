@@ -24,6 +24,7 @@ compile_commands.json
 
 # Python
 __pycache__/
+*.pyc
 
 # IDE specific
 .vscode/
