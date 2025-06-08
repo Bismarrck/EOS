@@ -99,6 +99,7 @@ install(FILES
 # This creates <prefix>/lib/cmake/EOSCore/EOSCoreTargets.cmake with install-tree paths
 install(EXPORT EOSCoreTargets
         FILE EOSCoreTargets.cmake # Filename within the DESTINATION directory
+        NAMESPACE EOS::
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/EOSCore"
         COMPONENT DevelopmentFiles
 )
