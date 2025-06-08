@@ -103,3 +103,9 @@ install(EXPORT EOSCoreTargets
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/EOSCore"
         COMPONENT DevelopmentFiles
 )
+
+install(FILES src/fortran/module_eos_fortran_interface.f90
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/EOSCore/fortran_src # Standardized location
+        RENAME module_eos_fortran_interface.F90 # Optional: Rename to .F90 for convention
+        COMPONENT DevelopmentFiles # Or a new component like "FortranInterfaceSource"
+)

@@ -1,3 +1,9 @@
 @PACKAGE_INIT@
+
+# Define a variable pointing to the installed Fortran interface module source(s) directory
+set(EOSCore_FORTRAN_MODULE_SOURCES_DIR "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/EOSCore/fortran_src")
+# Define a variable for the specific interface file if commonly needed
+set(EOSCore_FORTRAN_INTERFACE_MODULE_FILE "${EOSCore_FORTRAN_MODULE_SOURCES_DIR}/module_eos_fortran_interface.F90")
+
 include("${CMAKE_CURRENT_LIST_DIR}/EOSCoreTargets.cmake")
 check_required_components(EOSCore)
