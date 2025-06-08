@@ -25,6 +25,7 @@ PROGRAM fortran_eos_example
 
     IF (num_args >= 1) THEN
         CALL GETARG(1, data_dir_arg) ! Get the first argument (gfortran extension)
+        arg_len = len(data_dir_arg)
         IF (arg_len > 0 .AND. arg_len <= LEN(data_dir_arg)) THEN
             data_dir_arg = data_dir_arg(1:arg_len) ! Use actual length
             data_dir_provided = .TRUE.
