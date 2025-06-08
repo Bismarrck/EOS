@@ -16,17 +16,23 @@ pybind11_add_module(PyEOS SHARED
         pybind_eos.cpp
 )
 
-# Link the Python module against our C++/Fortran libraries
-target_link_libraries(PyEOS PRIVATE
-        EquationOfStateV1_lib   # C++ static library (includes C-API if you were using it)
-        eos_fortran_core_obj    # Fortran object library
+if(TARGET EOSCore)
+    target_link_libraries(PyEOS PRIVATE EOSCore) # Link against the shared EOSCore library
+else()
+    # Fallback if EOSCore target isn't defined (e.g. building python module standalone)
+    # This was the old way, linking components directly.
+    message(STATUS "EOSCore target not found, linking PyEOS to components.")
+    target_link_libraries(PyEOS PRIVATE
+            EquationOfStateV1_lib
+            $<TARGET_OBJECTS:eos_fortran_core_obj>
+    )
+endif()
+
+# Optional: Install the Python module
+# This destination should allow Python to find it, e.g. site-packages or a path added to PYTHONPATH
+# pybind11_install_module(PyEOS DESTINATION ${CMAKE_INSTALL_PREFIX}/python/PyEOS COMPONENT python)
+# A common pattern for local install:
+install(TARGETS PyEOS
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/python_packages/PyEOS # Or some other relative path
+        COMPONENT python_bindings
 )
-
-# Ensure pybind_eos.cpp can find EquationOfStateV1.h
-# This should be handled by EquationOfStateV1_lib's PUBLIC include directory.
-# And pybind11 headers should be found via pybind11_add_module or global include path.
-
-# Optional: Installation rules for the Python module
-# This usually involves installing to Python's site-packages or a specific local directory.
-# pybind11_install_module(PyEOS DESTINATION my_python_packages) # Example
-# For now, we'll build it in the build tree.

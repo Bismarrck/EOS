@@ -8,6 +8,9 @@ add_library(eos_fortran_core_obj OBJECT
         module_eos_fortran_interface.f90
 )
 
+# To make .mod files easily findable by other Fortran targets
+# that might compile against this module's outputs directly
+# (like the Fortran tests/examples).
 target_include_directories(eos_fortran_core_obj INTERFACE
         ${CMAKE_CURRENT_BINARY_DIR} # This makes .mod files findable
 )
