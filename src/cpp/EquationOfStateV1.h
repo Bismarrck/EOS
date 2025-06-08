@@ -5,6 +5,8 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <functional>
+
 
 // Forward declare Fortran-interfacing functions (actual definitions in .cpp)
 // These are the C names given in BIND(C, name='...')
