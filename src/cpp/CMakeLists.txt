@@ -18,7 +18,7 @@ target_include_directories(EquationOfStateV1_lib
         # For builds within this project (e.g., EOSCore linking EquationOfStateV1_lib)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils>
-        $<INSTALL_INTERFACE:include/EOSCore> # This path is relative to CMAKE_INSTALL_PREFIX
+        $<INSTALL_INTERFACE:include> # This path is relative to CMAKE_INSTALL_PREFIX
 )
 
 # Install EquationOfStateV1_lib and add it to the EOSCoreTargets export set
