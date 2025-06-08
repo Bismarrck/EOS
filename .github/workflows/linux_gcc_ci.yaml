@@ -97,7 +97,7 @@ jobs:
 
       - name: Run Fortran Example
         working-directory: ${{ github.workspace }}/build_example_fortran
-        run: ./FortranEOSDemo # Assumes main.f90 data_dir path is now relative to where this runs
+        run: ./FortranEOSDemo ${{ github.workspace }}/eos_data_dir
 
       # Test Python Module Import and Basic Usage from installed location
       - name: Test Installed Python Module (Basic Import & Run Demo)
