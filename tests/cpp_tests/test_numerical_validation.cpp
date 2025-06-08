@@ -3,6 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 #include <iomanip> // For std::stod in a robust way if needed
 #include "EquationOfStateV1.h"
 #include "utils/string_utils.h"
