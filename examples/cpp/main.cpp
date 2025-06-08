@@ -1,5 +1,11 @@
 // examples/cpp_example/main.cpp
-#include <EquationOfStateV1.h> // Note the include path after install
+#if defined(BUILT_WITHIN_MAIN_PROJECT)
+  #include "EquationOfStateV1.h" // Found via target_include_directories above
+  #include "utils/string_utils.h"
+#else
+  #include <EOSCore/EquationOfStateV1.h> // For installed package
+  #include <EOSCore/string_utils.h>
+#endif
 #include <string_utils.h>    // If string_utils.h is also public/installed
 #include <iostream>
 #include <vector>

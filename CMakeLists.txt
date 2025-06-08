@@ -74,7 +74,9 @@ endif()
 
 option(EOS_BUILD_EXAMPLES "Build example programs" ON)
 if(EOS_BUILD_EXAMPLES)
-    add_subdirectory(examples) # examples/cpp_example/CMakeLists.txt will call find_package(EOSCore)
+    set(EOS_LIBRARY_IS_BUILDING_EXAMPLES ON CACHE INTERNAL "Flag set when examples are built by main project")
+    add_subdirectory(examples)
+    unset(EOS_LIBRARY_IS_BUILDING_EXAMPLES CACHE)
 endif()
 
 # --- Installation Rules ---)
@@ -97,7 +99,6 @@ install(FILES
 # This creates <prefix>/lib/cmake/EOSCore/EOSCoreTargets.cmake with install-tree paths
 install(EXPORT EOSCoreTargets
         FILE EOSCoreTargets.cmake # Filename within the DESTINATION directory
-        NAMESPACE EOS::
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/EOSCore"
         COMPONENT DevelopmentFiles
 )
