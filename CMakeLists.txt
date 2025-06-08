@@ -38,13 +38,6 @@ install(TARGETS EOSCore
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT DevelopmentLibraries
 )
 
-# 1. Generate EOSCoreTargets.cmake in the build directory for build-tree usage.
-#    This uses the targets that have been associated with the 'EOSCoreTargets' export set.
-export(EXPORT EOSCoreTargets # Use the EXPORT SET name here
-        FILE "${CMAKE_CURRENT_BINARY_DIR}/EOSCoreTargets.cmake"
-        NAMESPACE EOS::
-)
-
 # --- Configure CMake Package Files for both build-tree and install-tree ---
 configure_package_config_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EOSCoreConfig.cmake.in"

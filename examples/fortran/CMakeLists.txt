@@ -1,22 +1,20 @@
-# examples/fortran_example/CMakeLists.txt
 cmake_minimum_required(VERSION 3.15)
 project(FortranEOSDemo LANGUAGES Fortran)
 
-# Find the installed EOSCore package to get library path and C/C++ includes for the C-API
-# that module_eos_fortran_interface might effectively depend on (though it's indirect).
-find_package(EOSCore 1.0.0 REQUIRED)
+if(NOT TARGET EOSCore OR NOT TARGET eos_fortran_core_obj OR NOT TARGET EquationOfStateV1_lib)
+    message(FATAL_ERROR "FortranEOSDemo: Required library targets not found.")
+endif()
 
+# This example compiles the interface module itself.
 add_executable(FortranEOSDemo main.f90)
-target_sources(FortranEOSDemo PRIVATE
-        main.f90
-)
 
-# Link against the imported target EOS::EOSCore
-target_link_libraries(FortranEOSDemo PRIVATE eos_fortran_core_obj)
-target_link_libraries(FortranEOSDemo PRIVATE EOS::EOSCore)
-
-# Ensure the Fortran compiler can find the C headers for BIND(C) (usually implicit)
-# And that it can find its own .mod files (module_eos_fortran_interface.mod)
-target_include_directories(FortranEOSDemo PRIVATE
-        ${CMAKE_CURRENT_BINARY_DIR} # For .mod files generated here
+# Link against the build-tree targets
+target_link_libraries(FortranEOSDemo PRIVATE
+        EOSCore                  # For the C-API symbols
+        eos_fortran_core_obj     # For any other Fortran modules used by the interface or main
+        # and to propagate .mod include path for module_eos_fortran_interface
 )
+# Ensure main.f90 can find module_eos_fortran_interface.mod (generated in this target's build dir)
+# and module_eos_fortran_interface.f90 can find .mod files from eos_fortran_core_obj
+target_include_directories(FortranEOSDemo PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+# The INTERFACE include from eos_fortran_core_obj should provide paths to its own .mod files.
