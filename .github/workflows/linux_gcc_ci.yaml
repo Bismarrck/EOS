@@ -104,10 +104,9 @@ jobs:
         env:
           # Adjust this path based on where `install(TARGETS PyEOS ...)` puts the module
           PYTHONPATH: ${{ github.workspace }}/install_dir/lib/python_packages
+          LD_LIBRARY_PATH: ${{ github.workspace }}/install_dir/lib
         run: |
           echo "PYTHONPATH set to: $PYTHONPATH"
-          cd $PYTHONPATH
-          ls -lh .
           python3 -c "import PyEOS; print('Successfully imported PyEOS from installed location!'); print('--- dir(PyEOS) ---'); print(dir(PyEOS)); print('--- End dir(PyEOS) ---'); Deos = PyEOS.EquationOfState(); print('Created PyEOS.EquationOfState instance.')"
           echo "Running Python Demo Script:"
           # Assume run_eos_demo.py is in examples/python
