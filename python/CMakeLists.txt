@@ -33,6 +33,6 @@ endif()
 # pybind11_install_module(PyEOS DESTINATION ${CMAKE_INSTALL_PREFIX}/python/PyEOS COMPONENT python)
 # A common pattern for local install:
 install(TARGETS PyEOS
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/python_packages/PyEOS # Or some other relative path
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/python_packages # Or some other relative path
         COMPONENT python_bindings
 )
