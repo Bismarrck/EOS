@@ -28,10 +28,10 @@ jobs:
             python3-pip \
             python3-pytest # For running pytest
 
-      - name: Set up Python (for Pybind11 and Python tests)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9' # Specify a Python version
+#      - name: Set up Python (for Pybind11 and Python tests)
+#        uses: actions/setup-python@v5
+#        with:
+#          python-version: '3.9' # Specify a Python version
 
       - name: Install Python packages (if any beyond pytest)
         run: |
