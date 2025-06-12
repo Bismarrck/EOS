@@ -114,6 +114,9 @@ public:
     int setComplicatedEOSUseOldColdTerm(bool value);
     int setUseTFDDataVer1(bool value); // This will influence TFD file choice in initialize
 
+    void set_perform_signature_check(bool enable);
+    bool get_perform_signature_check() const;
+
     // Main TFD loading function
     int loadTFDDataInternal(const std::string& hdf5_filepath); // Takes base dir for TFD files
 
@@ -164,6 +167,10 @@ private:
 
     bool tfd_use_ver1_setting_ = true; // C++ mirror of the Fortran control, default true
     bool complicated_eos_use_old_cold_term_setting_ = false;
+
+    // Signature check
+    bool perform_signature_check_ = true;
+    void check_file_signature(int eos_id, const std::string& full_filepath) const;
 };
 
 #endif // EQUATIONOFSTATEV1_H

@@ -17,6 +17,7 @@ if(WIN32)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 set(THIRDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+include_directories(SYSTEM ${THIRDPARTY_DIR})
 
 # --- Include Package Helpers ---
 include(GNUInstallDirs) # For CMAKE_INSTALL_LIBDIR, CMAKE_INSTALL_INCLUDEDIR

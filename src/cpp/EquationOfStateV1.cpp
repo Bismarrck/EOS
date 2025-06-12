@@ -11,6 +11,8 @@
 #include <cstring>
 #include <functional>
 #include "utils/string_utils.h"
+#include "utils/checksum_utils.h"
+#include "eos_checksums.h"
 
 
 // Helper for basic path joining (add to EquationOfStateV1.cpp or a common utils file)
@@ -533,6 +535,9 @@ int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list, const std
     // 1. Load TFD data
     std::string tfd_filename_to_load = (tfd_use_ver1_setting_ ? "tfd_ver1.h5" : "tfd_ver2.h5");
     std::string full_tfd_hdf5_path = eos_data_dir + "/" + tfd_filename_to_load; // Basic join
+
+    if (perform_signature_check_) check_file_signature(tfd_use_ver1_setting_ ? -1000 : -2000, full_tfd_hdf5_path);
+
     int tfd_load_status = loadTFDDataInternal(full_tfd_hdf5_path);
     if (tfd_load_status != EOS_SUCCESS) {
         std::cerr << "Error initializing: Failed to load TFD data. Code: " << tfd_load_status << std::endl;
@@ -546,6 +551,9 @@ int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list, const std
             std::cerr << "Error: Could not construct path for EOS ID " << id << std::endl;
             return EOS_ERROR_FILE_NOT_FOUND; // Or collect errors and report all
         }
+
+        if (perform_signature_check_)
+            check_file_signature(id, file_path_str);
 
         std::ifstream eos_file(file_path_str);
         if (!eos_file.is_open()) {
@@ -977,3 +985,38 @@ int EquationOfStateV1::unpack_data(const char* buffer, int buffer_size) {
     std::cout << "C++ (unpack_data): Successfully unpacked data." << std::endl;
     return EOS_SUCCESS;
 }
+
+
+bool EquationOfStateV1::get_perform_signature_check() const {
+    return perform_signature_check_;
+}
+
+void EquationOfStateV1::set_perform_signature_check(bool enable) {
+    perform_signature_check_ = enable;
+}
+
+void EquationOfStateV1::check_file_signature(const int eos_id, const std::string& full_filepath) const {
+    if (!perform_signature_check_) {
+        return;
+    }
+
+    auto it = official_file_checksums.find(eos_id);
+    if (it == official_file_checksums.end()) {
+        std::cout << "Signature Check Info: No official checksum registered for '"
+                  << eos_id << "'. Skipping check." << std::endl;
+        return;
+    }
+    const std::string& official_md5 = it->second;
+
+    std::string calculated_md5 = EOSCheckSumUtils::calculate_file_md5(full_filepath);
+
+    if (calculated_md5.empty()) {
+        std::cerr << "Signature Check Warning: Could not calculate MD5 for '"
+                  << full_filepath << "'. Checksum validation skipped." << std::endl;
+    }
+
+    if (calculated_md5 != official_md5) {
+        std::cerr << "Signature Check Warning: MD5 for '" << full_filepath << " does not match the database!" << std::endl;
+    }
+}
+
