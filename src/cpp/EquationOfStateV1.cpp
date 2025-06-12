@@ -636,7 +636,7 @@ int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list, const std
 
 int EquationOfStateV1::check_eos_data_dir(const std::string& eos_data_dir, const std::vector<int>& eos_ids_to_check) {
     // Check TFD files
-    std::string tfd_files_to_check[2] = { "tfd_ver1.dat", "tfd_ver2.dat" };
+    std::string tfd_files_to_check[2] = { "tfd_ver1.h5", "tfd_ver2.h5" };
 
     for (const std::string& tfd_suffix : tfd_files_to_check) {
         std::string tfd_path_str = simple_path_join(eos_data_dir, tfd_suffix);
