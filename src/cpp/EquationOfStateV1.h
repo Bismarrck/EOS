@@ -6,6 +6,7 @@
 #include <string>
 #include <map>
 #include <functional>
+#include <hdf5.h>
 
 
 // Forward declare Fortran-interfacing functions (actual definitions in .cpp)
@@ -36,6 +37,7 @@ struct TFDMatrices {
     std::vector<double> matrix_B;
     int N1 = 0, N2 = 0; // Common dimensions for A and B
     bool initialized = false;
+    std::string tfd_file_description;
 };
 
 // New extern "C" for Complicated EOS
@@ -113,7 +115,7 @@ public:
     int setUseTFDDataVer1(bool value); // This will influence TFD file choice in initialize
 
     // Main TFD loading function
-    int loadTFDDataInternal(const std::string& tfd_base_dir); // Takes base dir for TFD files
+    int loadTFDDataInternal(const std::string& hdf5_filepath); // Takes base dir for TFD files
 
     // --- Computation ---
     int compute(int eos_id, double rho, double T,
@@ -134,6 +136,12 @@ private:
     // Helper to read a single matrix's data from an already open stream, given dimensions
     static int read_matrix_values_from_stream(std::ifstream& infile, int N1, int N2,
                                               std::vector<double>& matrix_data, const std::string& matrix_name_for_error);
+
+    // HDF5 Helper (can be static or non-static member)
+    static herr_t read_hdf5_dataset_double(hid_t file_id, const char* dset_name,
+                                           int expected_n1, int expected_n2,
+                                           std::vector<double>& out_data);
+    static herr_t read_hdf5_scalar_int(hid_t file_id, const char* dset_name, int& out_val);
 
     // C++ shim functions for specific analytic EOS, these call the extern "C" Fortran wrappers
     // They are bound to std::function in the MaterialData

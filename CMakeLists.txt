@@ -1,4 +1,11 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.27)
+
+# --- Policy Rules ---
+if(POLICY CMP0148)
+    cmake_policy(SET CMP0148 OLD)
+endif()
+
+# --- Project ---
 project(EquationOfStateProject VERSION 1.0.0 LANGUAGES CXX Fortran) # Added VERSION
 
 set(CMAKE_CXX_STANDARD 14)
@@ -14,6 +21,17 @@ set(THIRDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 # --- Include Package Helpers ---
 include(GNUInstallDirs) # For CMAKE_INSTALL_LIBDIR, CMAKE_INSTALL_INCLUDEDIR
 include(CMakePackageConfigHelpers) # For configure_package_config_file, write_basic_package_version_file
+
+# --- External Dependency: HDF5 ---
+find_package(HDF5 REQUIRED COMPONENTS C HL) # Try to find HDF5
+if(HDF5_FOUND)
+    message(STATUS "Found HDF5: TRUE")
+    message(STATUS "HDF5 Include Dirs: ${HDF5_INCLUDE_DIRS}")
+    message(STATUS "HDF5 C Libraries: ${HDF5_C_LIBRARIES}")
+    message(STATUS "HDF5 HL Libraries: ${HDF5_HL_LIBRARIES}")
+else()
+    message(FATAL_ERROR "HDF5 not found but is required.")
+endif()
 
 # --- Source Subdirectories (Define library components) ---
 # These add_subdirectory calls ensure EquationOfStateV1_lib (STATIC) and eos_fortran_core_obj (OBJECT)

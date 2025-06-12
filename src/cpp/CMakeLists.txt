@@ -14,12 +14,22 @@ set_target_properties(EquationOfStateV1_lib PROPERTIES
 # Ensure EquationOfStateV1.h can be found by EquationOfStateV1.cpp
 # and by consumers of this library (like tests)
 target_include_directories(EquationOfStateV1_lib
-        PUBLIC
-        # For builds within this project (e.g., EOSCore linking EquationOfStateV1_lib)
+        PUBLIC # For its own headers
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils>
-        $<INSTALL_INTERFACE:include> # This path is relative to CMAKE_INSTALL_PREFIX
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+        ${HDF5_INCLUDE_DIRS}
 )
+
+# Determine correct HDF5 library linking
+# Modern HDF5 provides imported targets like HDF5::hdf5 and HDF5::hdf5_hl
+if(TARGET HDF5::hdf5 AND TARGET HDF5::hdf5_hl)
+    target_link_libraries(EquationOfStateV1_lib PRIVATE HDF5::hdf5 HDF5::hdf5_hl)
+elseif(TARGET HDF5::HDF5) # Older imported target name
+    target_link_libraries(EquationOfStateV1_lib PRIVATE HDF5::HDF5)
+else() # Fallback to variables
+    target_link_libraries(EquationOfStateV1_lib PRIVATE ${HDF5_C_LIBRARIES} ${HDF5_HL_LIBRARIES})
+endif()
 
 # Install EquationOfStateV1_lib and add it to the EOSCoreTargets export set
 # This assumes CMAKE_INSTALL_LIBDIR is defined (e.g., by include(GNUInstallDirs) in root)

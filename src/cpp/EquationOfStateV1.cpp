@@ -5,6 +5,8 @@
 #include <sstream>      // For std::istringstream
 #include <iomanip>      // For std::fixed, std::setprecision in main, can be useful here too
 #include <algorithm> // For std::transform for string tolower
+#include <hdf5.h>
+#include <hdf5_hl.h>
 #include <string>
 #include <cstring>
 #include <functional>
@@ -242,150 +244,277 @@ int EquationOfStateV1::setUseTFDDataVer1(bool value) {
     return istat;
 }
 
-// New helper function in EquationOfStateV1.cpp
-int EquationOfStateV1::read_matrix_values_from_stream(std::ifstream& infile, int N1, int N2,
-        std::vector<double>& matrix_data, const std::string& matrix_name_for_error) {
-    matrix_data.clear();
-    matrix_data.reserve(static_cast<size_t>(N1) * N2);
-    std::string token;
-    std::string line_content; // Renamed from 'line' for clarity
-
-    size_t values_to_read = static_cast<size_t>(N1) * N2;
-    size_t values_read = 0;
-
-    while (values_read < values_to_read && std::getline(infile, line_content)) {
-        // Handle comments: take substring before '#'
-        size_t comment_pos = line_content.find('#');
-        if (comment_pos != std::string::npos) {
-            line_content = line_content.substr(0, comment_pos);
-        }
-
-        // Trim trailing whitespace from the line_content after removing comment
-        // to prevent istringstream from trying to parse empty strings if line was just a comment
-        line_content.erase(line_content.find_last_not_of(" \t\n\r\f\v") + 1);
-        // Trim leading whitespace
-        line_content.erase(0, line_content.find_first_not_of(" \t\n\r\f\v"));
-
-        if (line_content.empty()) { // Skip empty lines or lines that became empty after comment removal
-            continue;
-        }
-
-        std::istringstream val_ss(line_content);
-        while (val_ss >> token) {
-            double value_converted;
-            if (!EOSUtils::string_to_double_fortran_compat(token, value_converted)) {
-                std::cerr << "Error: Failed to convert token '" << token << "' to double for " << matrix_name_for_error << std::endl;
-                return EOS_ERROR_FILE_PARSE;
-            }
-            if (values_read < values_to_read) {
-                matrix_data.push_back(value_converted);
-                values_read++;
-            } else {
-                std::cerr << "Warning: Extra data found after reading " << matrix_name_for_error
-                          << " (expected " << values_to_read << ")" << std::endl;
-                // This indicates more numbers on the line than needed for this matrix;
-                // it might be an issue or acceptable depending on file format strictness.
-                // For now, we stop reading for this matrix if we have enough.
-                goto end_matrix_read_loop;
-            }
-        }
-        if (val_ss.fail() && !val_ss.eof() && !val_ss.str().empty()) { // Check for non-double data on a non-empty processed line
-             std::cerr << "Error: Non-double value encountered while reading " << matrix_name_for_error
-                       << " from line content: \"" << line_content << "\"" << std::endl;
-             return EOS_ERROR_FILE_PARSE;
-        }
+// --- HDF5 Helper Implementations ---
+herr_t EquationOfStateV1::read_hdf5_scalar_int(hid_t group_id_or_file_id, const char* dset_name, int& out_val) {
+    hid_t dset_id = H5Dopen2(group_id_or_file_id, dset_name, H5P_DEFAULT);
+    if (dset_id < 0) {
+        std::cerr << "HDF5 Error: Could not open integer dataset '" << dset_name << "'" << std::endl;
+        return -1; // Indicate error
     }
-end_matrix_read_loop:;
-
-    if (values_read != values_to_read) {
-        std::cerr << "Error: Read " << values_read << " values for " << matrix_name_for_error
-                  << ", but expected " << values_to_read
-                  << " for dimensions " << N1 << "x" << N2 << std::endl;
-        return EOS_ERROR_FILE_PARSE; // Data size mismatch
+    herr_t status = H5Dread(dset_id, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &out_val);
+    if (status < 0) {
+        std::cerr << "HDF5 Error: Could not read integer dataset '" << dset_name << "'" << std::endl;
     }
-    return EOS_SUCCESS;
+    H5Dclose(dset_id);
+    return status;
 }
 
-int EquationOfStateV1::loadTFDDataInternal(const std::string& tfd_base_dir) {
-    std::string tfd_file_name = (tfd_use_ver1_setting_ ? "tfd_ver1.dat" : "tfd_ver2.dat");
-    std::string full_tfd_path = simple_path_join(tfd_base_dir, tfd_file_name);
-
-    std::ifstream infile(full_tfd_path);
-    if (!infile.is_open()) {
-        std::cerr << "Error: Could not open TFD file: " << full_tfd_path << std::endl;
-        tfd_data.initialized = false;
-        return EOS_ERROR_FILE_NOT_FOUND;
+herr_t EquationOfStateV1::read_hdf5_dataset_double(hid_t file_id, const char* dset_name,
+                                                 int expected_n1, int expected_n2,
+                                                 std::vector<double>& out_data) {
+    hid_t dset_id = H5Dopen2(file_id, dset_name, H5P_DEFAULT);
+    if (dset_id < 0) {
+        std::cerr << "HDF5 Error: Could not open double dataset '" << dset_name << "'" << std::endl;
+        return -1;
     }
 
-    std::string line_content;
-    // Read common dimensions N1, N2
-    if (!std::getline(infile, line_content)) {
-        std::cerr << "Error: Could not read dimensions line from " << full_tfd_path << std::endl;
-        tfd_data.initialized = false;
-        return EOS_ERROR_FILE_PARSE;
+    hid_t dataspace_id = H5Dget_space(dset_id);
+    if (dataspace_id < 0) {
+        std::cerr << "HDF5 Error: Could not get dataspace for '" << dset_name << "'" << std::endl;
+        H5Dclose(dset_id);
+        return -1;
     }
-   size_t comment_pos = line_content.find('#');
-    if (comment_pos != std::string::npos) {
-        line_content = line_content.substr(0, comment_pos);
+
+    int rank = H5Sget_simple_extent_ndims(dataspace_id);
+    if (rank != 2) { // Assuming 2D matrices
+        std::cerr << "HDF5 Error: Dataset '" << dset_name << "' is not 2D (rank=" << rank << ")" << std::endl;
+        H5Sclose(dataspace_id);
+        H5Dclose(dset_id);
+        return -1;
     }
-    // Trim whitespace (optional for dimension line if you expect only N1 N2 # comment)
-    line_content.erase(line_content.find_last_not_of(" \t\n\r\f\v") + 1);
-    line_content.erase(0, line_content.find_first_not_of(" \t\n\r\f\v"));
 
+    hsize_t dims[2];
+    H5Sget_simple_extent_dims(dataspace_id, dims, NULL);
+    if (static_cast<int>(dims[0]) != expected_n1 || static_cast<int>(dims[1]) != expected_n2) {
+        std::cerr << "HDF5 Error: Dimension mismatch for dataset '" << dset_name << "'. "
+                  << "Expected " << expected_n1 << "x" << expected_n2
+                  << ", Got " << dims[0] << "x" << dims[1] << std::endl;
+        H5Sclose(dataspace_id);
+        H5Dclose(dset_id);
+        return -1;
+    }
 
-    std::istringstream dim_ss(line_content);
-    if (!(dim_ss >> tfd_data.N1 >> tfd_data.N2) || !line_content.empty() && dim_ss.eof() && !dim_ss.fail()) {
-        // The "|| !line_content.empty() && ..." part is tricky. If there's trailing non-numeric, non-comment data after N1 N2,
-        // it might be an error. A simpler check is just if N1 and N2 were read.
-        // A more robust check would be to see if anything is left in dim_ss after reading N1 and N2.
-        std::string remaining_in_dim_line;
-        if (dim_ss >> remaining_in_dim_line) { // if successfully read something else
-             std::cerr << "Error: Extra data '" << remaining_in_dim_line << "' found on dimension line in " << full_tfd_path << std::endl;
-             tfd_data.initialized = false;
-             return EOS_ERROR_FILE_PARSE;
+    out_data.resize(static_cast<size_t>(expected_n1) * expected_n2);
+    herr_t status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, out_data.data());
+    if (status < 0) {
+        std::cerr << "HDF5 Error: Could not read double dataset '" << dset_name << "'" << std::endl;
+    }
+
+    H5Sclose(dataspace_id);
+    H5Dclose(dset_id);
+    return status;
+}
+
+// Helper for reading string attributes
+static bool read_hdf5_string_attribute(hid_t object_id, const char* attr_name, std::string& out_str) {
+    out_str.clear();
+    if (H5Aexists(object_id, attr_name) <= 0) {
+        return true; // Attribute doesn't exist, not an error for this helper
+    }
+
+    hid_t attr_id = H5Aopen_name(object_id, attr_name);
+    if (attr_id < 0) { /* error */ return false; }
+
+    hid_t file_type_id = H5Aget_type(attr_id);
+    if (file_type_id < 0) { /* error */ H5Aclose(attr_id); return false; }
+
+    // Check if it's a variable-length string in the file
+    htri_t is_vlen_str_in_file = H5Tis_variable_str(file_type_id);
+    if (is_vlen_str_in_file < 0) { /* error */ H5Tclose(file_type_id); H5Aclose(attr_id); return false; }
+
+    hid_t mem_type_id = H5Tcopy(H5T_C_S1); // Start with a C string type
+    if (mem_type_id < 0) { /* error */ H5Tclose(file_type_id); H5Aclose(attr_id); return false; }
+
+    if (is_vlen_str_in_file > 0) { // Variable-length string in file
+        if (H5Tset_size(mem_type_id, H5T_VARIABLE) < 0) { /* error */ H5Tclose(mem_type_id); H5Tclose(file_type_id); H5Aclose(attr_id); return false; }
+    } else if (H5Tget_class(file_type_id) == H5T_STRING) { // Fixed-length string in file
+        size_t fixed_size = H5Tget_size(file_type_id);
+        if (fixed_size == 0 || fixed_size == H5T_VARIABLE) { /* error: unexpected */ H5Tclose(mem_type_id); H5Tclose(file_type_id); H5Aclose(attr_id); return false; }
+        if (H5Tset_size(mem_type_id, fixed_size) < 0) { /* error */ H5Tclose(mem_type_id); H5Tclose(file_type_id); H5Aclose(attr_id); return false; }
+    } else { /* error: not a string type */ H5Tclose(mem_type_id); H5Tclose(file_type_id); H5Aclose(attr_id); return false; }
+
+    // *** Crucial: Match character set if reading UTF-8 from file ***
+    // h5dump shows CSET H5T_CSET_UTF8 for the attributes.
+    if (H5Tget_cset(file_type_id) == H5T_CSET_UTF8) {
+        if (H5Tset_cset(mem_type_id, H5T_CSET_UTF8) < 0) {
+            std::cerr << "HDF5 Warning: Failed to set memory type character set to UTF-8 for attribute '" << attr_name << "'." << std::endl;
+            // Continue anyway, but conversion might still fail or be lossy.
         }
-        // If the previous check isn't catching it, and the error "Non-double value encountered while reading Matrix A"
-        // occurs, it means the dimension line itself might be consumed by the matrix reader if not careful,
-        // or the matrix reader is picking up the comment part of the dimension line.
-        // The critical part is that after reading dimensions, the stream 'infile' is positioned correctly for matrix A.
-        // The provided `read_matrix_values_from_stream` should now handle comments on its own lines.
-        // The error "Non-double value encountered while reading Matrix A" likely means that the first line
-        // matrix_A_reader tries to parse starts with '#' or similar after N1, N2 are read from the file stream.
+    }
+    // Ensure null termination for memory type (good practice)
+    // H5Tset_strpad(mem_type_id, H5T_STR_NULLTERM); // Usually H5T_C_S1 is already null-terminated
 
-        // Let's re-verify the dim_ss check
-        if (!(std::istringstream(line_content) >> tfd_data.N1 >> tfd_data.N2)) { // Use a new istringstream for this check
-            std::cerr << "Error: Could not parse dimensions N1, N2 from processed line: \"" << line_content << "\" in " << full_tfd_path << std::endl;
-            tfd_data.initialized = false;
-            return EOS_ERROR_FILE_PARSE;
+    char* str_read_buffer_vlen = nullptr;
+    std::vector<char> str_read_buffer_fixed;
+    void* actual_read_ptr;
+
+    if (is_vlen_str_in_file > 0) {
+        actual_read_ptr = &str_read_buffer_vlen; // H5Aread expects char**
+    } else {
+        size_t mem_size = H5Tget_size(mem_type_id);
+        str_read_buffer_fixed.resize(mem_size + 1, '\0'); // +1 for safety null term
+        actual_read_ptr = str_read_buffer_fixed.data();
+    }
+
+    herr_t read_status = H5Aread(attr_id, mem_type_id, actual_read_ptr);
+
+    if (read_status < 0) {
+        std::cerr << "HDF5 Error: H5Aread failed for attribute '" << attr_name << "'." << std::endl;
+        H5Eprint(H5E_DEFAULT, stderr);
+        if (is_vlen_str_in_file > 0 && str_read_buffer_vlen) H5free_memory(str_read_buffer_vlen);
+        H5Tclose(mem_type_id); H5Tclose(file_type_id); H5Aclose(attr_id); return false;
+    }
+
+    if (is_vlen_str_in_file > 0) {
+        if (str_read_buffer_vlen) {
+            out_str = str_read_buffer_vlen;
+            H5free_memory(str_read_buffer_vlen);
+        } else { out_str = ""; }
+    } else {
+        out_str = str_read_buffer_fixed.data();
+    }
+
+    H5Tclose(mem_type_id);
+    H5Tclose(file_type_id);
+    H5Aclose(attr_id);
+    return true;
+}
+
+
+// Helper for reading scalar variable-length string dataset
+static bool read_hdf5_scalar_vlen_string_dataset(hid_t file_id, const char* dset_name, std::string& out_str) {
+    out_str.clear();
+    hid_t dset_id = H5Dopen2(file_id, dset_name, H5P_DEFAULT);
+    if (dset_id < 0) { /* ... */ return false; }
+
+    hid_t file_type_id = H5Dget_type(dset_id);
+    if (file_type_id < 0) { /* ... */ H5Dclose(dset_id); return false; }
+
+    // Verify it's a variable-length string in the file
+    htri_t is_vlen_str_in_file = H5Tis_variable_str(file_type_id);
+    if (is_vlen_str_in_file <= 0) { /* ... error message ... */ H5Tclose(file_type_id); H5Dclose(dset_id); return false; }
+
+    // Verify it's scalar
+    hid_t dspace_id = H5Dget_space(dset_id);
+    if (dspace_id < 0 || H5Sget_simple_extent_type(dspace_id) != H5S_SCALAR) { /* ... */ if (dspace_id >= 0) H5Sclose(dspace_id); H5Tclose(file_type_id); H5Dclose(dset_id); return false; }
+    H5Sclose(dspace_id);
+
+    // Prepare memory type
+    hid_t mem_type_id = H5Tcopy(H5T_C_S1);
+    if (mem_type_id < 0) { /* error */ H5Tclose(file_type_id); H5Dclose(dset_id); return false; }
+    if (H5Tset_size(mem_type_id, H5T_VARIABLE) < 0) { /* error */ H5Tclose(mem_type_id); H5Tclose(file_type_id); H5Dclose(dset_id); return false; }
+
+    // *** Match character set for dataset as well ***
+    if (H5Tget_cset(file_type_id) == H5T_CSET_UTF8) { // From h5dump, dataset is also UTF8
+        if (H5Tset_cset(mem_type_id, H5T_CSET_UTF8) < 0) {
+            std::cerr << "HDF5 Warning: Failed to set memory type character set to UTF-8 for dataset '" << dset_name << "'." << std::endl;
         }
     }
+
+    char* str_read_buffer = nullptr;
+    herr_t read_status = H5Dread(dset_id, mem_type_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, &str_read_buffer);
+
+    if (read_status < 0) {
+        std::cerr << "HDF5 Error: H5Dread failed for dataset '" << dset_name << "'." << std::endl;
+        H5Eprint(H5E_DEFAULT, stderr);
+        if (str_read_buffer) H5free_memory(str_read_buffer);
+        H5Tclose(mem_type_id); H5Tclose(file_type_id); H5Dclose(dset_id); return false;
+    }
+
+    if (str_read_buffer) {
+        out_str = str_read_buffer;
+        H5free_memory(str_read_buffer);
+    } else { out_str = ""; }
+
+    H5Tclose(mem_type_id);
+    H5Tclose(file_type_id);
+    H5Dclose(dset_id);
+    return true;
+}
+
+int EquationOfStateV1::loadTFDDataInternal(const std::string& hdf5_filepath) {
+    tfd_data.initialized = false; // Reset
+    std::cout << "C++ (loadTFDDataInternal): Attempting to load TFD data from HDF5 file: " << hdf5_filepath << std::endl;
+
+    // Suppress HDF5 default error printing, we'll handle errors via return codes
+    H5E_auto2_t old_func;
+    void *old_client_data;
+    H5Eget_auto2(H5E_DEFAULT, &old_func, &old_client_data);
+    H5Eset_auto2(H5E_DEFAULT, NULL, NULL); // Turn off HDF5 auto error printing
+
+    hid_t file_id = H5Fopen(hdf5_filepath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (file_id < 0) {
+        std::cerr << "HDF5 Error: Could not open TFD HDF5 file: " << hdf5_filepath << std::endl;
+        H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data); // Restore error printing
+        return EOS_ERROR_FILE_NOT_FOUND; // Or a specific HDF5 error code
+    }
+
+    // Read file-level attributes
+    std::string creation_date, tfd_version_attr;
+    if (read_hdf5_string_attribute(file_id, "file_creation_date", creation_date)) {
+        std::cout << "HDF5 Attr: File Creation Date = " << creation_date << std::endl;
+    }
+    if (read_hdf5_string_attribute(file_id, "tfd_model_version", tfd_version_attr)) {
+        std::cout << "HDF5 Attr: TFD Model Version = " << tfd_version_attr << std::endl;
+    }
+
+    // Read model description dataset
+    if (read_hdf5_scalar_vlen_string_dataset(file_id, "/model_description", tfd_data.tfd_file_description)) { // Assuming tfd_file_description is a member
+        std::cout << "HDF5 Dataset: Model Description loaded (length " << tfd_data.tfd_file_description.length() << ")." << std::endl;
+        // For brevity, don't print long descriptions here.
+    } else {
+        std::cout << "HDF5 Info: No '/model_description' dataset found or failed to read." << std::endl;
+    }
+
+    herr_t status;
+    hid_t common_dims_group_id = H5Gopen2(file_id, "/common_dimensions", H5P_DEFAULT);
+    if (common_dims_group_id < 0) {
+        std::cerr << "HDF5 Error: Could not open group '/common_dimensions' in " << hdf5_filepath << std::endl;
+        H5Fclose(file_id);
+        H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data);
+        return EOS_ERROR_FILE_PARSE; // Or HDF5 specific
+    }
+
+    status = read_hdf5_scalar_int(common_dims_group_id, "N1", tfd_data.N1);
+    if (status < 0) { H5Gclose(common_dims_group_id); H5Fclose(file_id); H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data); return EOS_ERROR_FILE_PARSE; }
+    status = read_hdf5_scalar_int(common_dims_group_id, "N2", tfd_data.N2);
+    if (status < 0) { H5Gclose(common_dims_group_id); H5Fclose(file_id); H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data); return EOS_ERROR_FILE_PARSE; }
+    H5Gclose(common_dims_group_id);
 
     if (tfd_data.N1 <= 0 || tfd_data.N2 <= 0) {
-        std::cerr << "Error: Invalid dimensions N1=" << tfd_data.N1 << ", N2=" << tfd_data.N2
-                  << " in " << full_tfd_path << std::endl;
-        tfd_data.initialized = false;
+        std::cerr << "HDF5 Error: Invalid dimensions N1=" << tfd_data.N1 << ", N2=" << tfd_data.N2
+                  << " read from " << hdf5_filepath << std::endl;
+        H5Fclose(file_id);
+        H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data);
         return EOS_ERROR_INVALID_DIMENSIONS;
     }
-    std::cout << "TFD dimensions from " << full_tfd_path << ": " << tfd_data.N1 << "x" << tfd_data.N2 << std::endl;
+    std::cout << "HDF5: Read TFD dimensions: " << tfd_data.N1 << "x" << tfd_data.N2 << std::endl;
 
-    // Read Matrix A
-    int istat_A = read_matrix_values_from_stream(infile, tfd_data.N1, tfd_data.N2, tfd_data.matrix_A, "Matrix A");
-    if (istat_A != EOS_SUCCESS) {
-        tfd_data.initialized = false;
-        return EOS_ERROR_TFD_LOAD_A + istat_A;
-    }
-    std::cout << "Successfully read Matrix A data." << std::endl;
+    // Determine which TFD version group to read from
+    // std::string tfd_version_group = (tfd_use_ver1_setting_ ? "/tfd_version_1" : "/tfd_version_2");
+    // For simplicity, let's assume datasets are at root or a fixed path for now,
+    // and the file name itself (tfd_ver1.h5 vs tfd_ver2.h5) distinguishes versions.
+    // Or, if the file contains multiple versions:
+    // hid_t version_group_id = H5Gopen2(file_id, tfd_version_group.c_str(), H5P_DEFAULT);
+    // if (version_group_id < 0) { /* error */ }
+    // status = read_hdf5_dataset_double(version_group_id, "MatrixA", ...);
+    // H5Gclose(version_group_id);
 
-    // Read Matrix B
-    int istat_B = read_matrix_values_from_stream(infile, tfd_data.N1, tfd_data.N2, tfd_data.matrix_B, "Matrix B");
-    if (istat_B != EOS_SUCCESS) {
-        tfd_data.initialized = false;
-        return EOS_ERROR_TFD_LOAD_B + istat_B;
-    }
+    // Assuming MatrixA and MatrixB are top-level datasets in the HDF5 file for now
+    status = read_hdf5_dataset_double(file_id, "/matrix_A", tfd_data.N1, tfd_data.N2, tfd_data.matrix_A);
+    if (status < 0) { H5Fclose(file_id); H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data); return EOS_ERROR_TFD_LOAD_A; }
+    std::cout << "HDF5: Successfully read Matrix A." << std::endl;
 
+    status = read_hdf5_dataset_double(file_id, "/matrix_B", tfd_data.N1, tfd_data.N2, tfd_data.matrix_B);
+    if (status < 0) { H5Fclose(file_id); H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data); return EOS_ERROR_TFD_LOAD_B; }
+    std::cout << "HDF5: Successfully read Matrix B." << std::endl;
+
+    H5Fclose(file_id);
+    H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data); // Restore HDF5 auto error printing
 
     tfd_data.initialized = true;
-    std::cout << "C++: TFD data (" << (tfd_use_ver1_setting_ ? "ver1" : "ver2") << ") loaded successfully from " << full_tfd_path << std::endl;
+    // tfd_data.loaded_tfd_filepath = hdf5_filepath; // Store which file was loaded
+    std::cout << "C++: TFD data loaded successfully from HDF5 file: " << hdf5_filepath << std::endl;
     return EOS_SUCCESS;
 }
 
@@ -402,7 +531,9 @@ int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list, const std
     }
 
     // 1. Load TFD data
-    int tfd_load_status = loadTFDDataInternal(eos_data_dir); // Pass base data dir for TFD files
+    std::string tfd_filename_to_load = (tfd_use_ver1_setting_ ? "tfd_ver1.h5" : "tfd_ver2.h5");
+    std::string full_tfd_hdf5_path = eos_data_dir + "/" + tfd_filename_to_load; // Basic join
+    int tfd_load_status = loadTFDDataInternal(full_tfd_hdf5_path);
     if (tfd_load_status != EOS_SUCCESS) {
         std::cerr << "Error initializing: Failed to load TFD data. Code: " << tfd_load_status << std::endl;
         return tfd_load_status;
