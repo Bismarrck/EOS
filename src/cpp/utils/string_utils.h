@@ -16,7 +16,9 @@ namespace EOSUtils {
     // The converted double is stored in out_val.
     bool string_to_double_fortran_compat(const std::string& s, double& out_val);
 
-    // You can add more string or general utilities here later.
+    std::string simple_path_join(const std::string& p1, const std::string& p2);
+
+    std::string get_eos_file_path(const std::string& base_dir, int eos_id_full);
 
 } // namespace EOSUtils
 
