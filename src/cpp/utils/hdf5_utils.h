@@ -1,6 +1,10 @@
 #ifndef HDF5_UTILS_H_H
 #define HDF5_UTILS_H_H
 
+#include <hdf5.h>
+#include <string>
+#include <vector>
+
 namespace HDF5Utils {
 
 // --- HDF5 Helper Implementations ---
