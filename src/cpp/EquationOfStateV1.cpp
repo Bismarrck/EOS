@@ -13,6 +13,7 @@
 #include <string>
 
 #include "eos_checksums.h"
+#include "eos_error_codes.h"
 #include "materials/AnalyticEOS.h"
 #include "materials/ComplicatedLegacyEOS.h"
 #include "materials/MaterialEOS.h"  // Base class for EOS models
@@ -68,159 +69,6 @@ int EquationOfStateV1::parse_eos_id_from_filename_stub(
     }
   }
   return -1;  // Indicate failure to parse ID
-}
-
-static int parse_complicated_eos_params(
-    std::ifstream& eos_file, const std::string& file_path_for_error,
-    const std::vector<std::string>& param_order,
-    std::vector<double>& out_flat_params) {
-  out_flat_params.clear();
-  std::map<std::string, std::vector<double>> parsed_keyed_params;
-  std::string line;
-  int line_number = 0;
-
-  bool in_header_separator_block = false;
-  std::string current_active_key =
-      "";  // To track the key for value continuations
-
-  while (std::getline(eos_file, line)) {
-    line_number++;
-    std::string processed_line = line;
-
-    // Handle comments (full line '#' or '!')
-    size_t comment_char_pos = processed_line.find_first_of("#!");
-    if (comment_char_pos != std::string::npos) {
-      processed_line = processed_line.substr(0, comment_char_pos);
-    }
-    processed_line = EOSUtils::trim_string(processed_line);
-
-    if (processed_line.empty()) {
-      // An empty line usually resets the "current_active_key" for
-      // continuations, unless specific rules say otherwise. For now, let's
-      // assume it does. However, if a key expects many values and they are
-      // sparse with blank lines, this might be too strict. Let's keep
-      // current_active_key unless a new key is defined.
-      continue;
-    }
-
-    // Handle "=========" separator blocks
-    if (processed_line.find("====") == 0) {
-      in_header_separator_block = !in_header_separator_block;
-      current_active_key =
-          "";  // Reset active key when exiting/entering separator
-      continue;
-    }
-    if (in_header_separator_block) {
-      current_active_key = "";  // Reset active key while inside separator
-      continue;
-    }
-
-    size_t eq_pos = processed_line.find('=');
-    std::string key_part = "";
-    std::string value_part = "";
-
-    if (eq_pos !=
-        std::string::npos) {  // This line defines a new key or redefines one
-      key_part = EOSUtils::trim_string(processed_line.substr(0, eq_pos));
-      value_part = EOSUtils::trim_string(processed_line.substr(eq_pos + 1));
-
-      if (key_part.empty()) {
-        std::cerr << "Error (" << file_path_for_error << ":" << line_number
-                  << "): Missing key for line with '=': \"" << line << "\""
-                  << std::endl;
-        return EOS_ERROR_FILE_PARSE;
-      }
-      std::transform(key_part.begin(), key_part.end(), key_part.begin(),
-                     ::tolower);      // Normalize key
-      current_active_key = key_part;  // This is now the active key
-
-      // If this key was seen before, clear its old values if this is a
-      // re-definition Or decide on append vs overwrite. For simplicity, let's
-      // assume re-definition clears. However, typical continuation means first
-      // "key=" line starts values, subsequent are appended. So, if key_part is
-      // new or different from previous non-empty current_active_key, it's a new
-      // list. If parsed_keyed_params.count(current_active_key), we will append
-      // to it.
-      if (!parsed_keyed_params.count(current_active_key)) {
-        parsed_keyed_params[current_active_key] = {};  // Ensure vector exists
-      }
-
-    } else {  // No '=', so this line must be a continuation of values for
-              // current_active_key
-      if (current_active_key.empty()) {
-        // This line has no '=' and there's no active key (e.g., after a
-        // separator or at the start) It could be an error, or just an ignorable
-        // line of values without a key.
-        std::cerr << "Warning (" << file_path_for_error << ":" << line_number
-                  << "): Line with values but no '=' and no active key: \""
-                  << line << "\". Ignoring." << std::endl;
-        continue;
-      }
-      value_part = processed_line;  // The whole line is values
-    }
-
-    // Now parse values from value_part
-    if (!value_part.empty()) {
-      std::istringstream val_ss(value_part);
-      std::string token;
-      bool values_found_on_this_line = false;
-      while (val_ss >> token) {
-        double val_converted;
-        if (!EOSUtils::string_to_double_fortran_compat(token, val_converted)) {
-          std::cerr << "Error (" << file_path_for_error << ":" << line_number
-                    << "): Failed to convert value token '" << token
-                    << "' for key '" << current_active_key << "'" << std::endl;
-          return EOS_ERROR_FILE_PARSE;
-        }
-        // Append to the current_active_key's vector
-        if (current_active_key
-                .empty()) { /* Should not happen due to check above */
-        } else {
-          parsed_keyed_params[current_active_key].push_back(val_converted);
-          values_found_on_this_line = true;
-        }
-      }
-      // If value_part was not empty, but no numeric tokens were extracted
-      // (e.g., "key = non_numeric_stuff")
-      if (!values_found_on_this_line && !value_part.empty()) {
-        std::cerr << "Error (" << file_path_for_error << ":" << line_number
-                  << "): No valid numeric values found for key '"
-                  << current_active_key << "' from value string: \""
-                  << value_part << "\"" << std::endl;
-        return EOS_ERROR_FILE_PARSE;
-      }
-    }
-    // If value_part was empty (e.g. "key = #comment" or "key ="), do nothing
-    // for values.
-  }
-
-  // Assemble flat_params based on param_order (this part remains the same)
-  for (const std::string& ordered_key_orig : param_order) {
-    std::string ordered_key = ordered_key_orig;
-    std::transform(ordered_key.begin(), ordered_key.end(), ordered_key.begin(),
-                   ::tolower);
-
-    auto it = parsed_keyed_params.find(ordered_key);
-    if (it == parsed_keyed_params.end()) {
-      std::cerr << "Error (" << file_path_for_error
-                << "): Required parameter key '" << ordered_key_orig
-                << "' not found in file." << std::endl;
-      return EOS_ERROR_FILE_PARSE;
-    }
-    if (it->second.empty()) {
-      std::cerr << "Warning (" << file_path_for_error
-                << "): Required parameter key '" << ordered_key_orig
-                << "' was found but has no associated values." << std::endl;
-      // Depending on requirements, this could be an error.
-      // For now, we'll insert an empty vector's worth of data (i.e., nothing),
-      // which might cause issues later if the Fortran code expects a certain
-      // number of parameters for this key.
-    }
-    out_flat_params.insert(out_flat_params.end(), it->second.begin(),
-                           it->second.end());
-  }
-
-  return EOS_SUCCESS;
 }
 
 // --- Shim Implementations ---
@@ -409,131 +257,122 @@ int EquationOfStateV1::loadTFDDataInternal(const std::string& hdf5_filepath) {
 // --- Initialization ---
 int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list,
                                   const std::string& eos_data_dir) {
-  // 0. Ensure Fortran side knows which TFD version we prefer.
-  //    The C++ tfd_use_ver1_setting_ is the master; set it if user calls the
-  //    setter. Then ensure Fortran is synced.
-  int f_istat;
-  c_set_use_tfd_data_ver1(tfd_use_ver1_setting_, &f_istat);
-  if (f_istat != 0) {
-    std::cerr << "Error setting Fortran TFD version preference." << std::endl;
-    // Decide if this is a fatal error for initialize
-  }
+  free_resources();  // Clear previous state, also re-creates tfd_data_
+                     // unique_ptr
 
-  // 1. Load TFD data
-  std::string tfd_filename_to_load =
+  // 0. Sync Fortran control variables (call C-API setters)
+  int f_istat_dummy;  // We might not strictly need to check status here if
+                      // setters are simple
+  c_set_use_tfd_data_ver1(tfd_use_ver1_setting_, &f_istat_dummy);
+  c_set_complicated_eos_use_old_cold_term(
+      complicated_eos_use_old_cold_term_setting_, &f_istat_dummy);
+
+  // 1. Load TFD data (HDF5 based)
+  std::string tfd_relative_filename =
       (tfd_use_ver1_setting_ ? "tfd_ver1.h5" : "tfd_ver2.h5");
-  std::string full_tfd_hdf5_path =
-      eos_data_dir + "/" + tfd_filename_to_load;  // Basic join
+  std::string full_tfd_filepath =
+      EOSUtils::simple_path_join(eos_data_dir, tfd_relative_filename);
 
-  if (perform_signature_check_)
-    check_file_signature(tfd_use_ver1_setting_ ? -1000 : -2000,
-                         full_tfd_hdf5_path);
-
-  int tfd_load_status = loadTFDDataInternal(full_tfd_hdf5_path);
-  if (tfd_load_status != EOS_SUCCESS) {
-    std::cerr << "Error initializing: Failed to load TFD data. Code: "
-              << tfd_load_status << std::endl;
-    return tfd_load_status;
+  int tfd_load_stat = loadTFDDataInternal(full_tfd_filepath);
+  if (tfd_load_stat != EOS_SUCCESS) {
+    std::cerr << "Error (EquationOfStateV1::initialize): Failed to load TFD "
+                 "data from "
+              << full_tfd_filepath << ". Code: " << tfd_load_stat << std::endl;
+    return tfd_load_stat;  // Critical failure
   }
 
-  // 2. Load data for each EOS ID
   // 2. Load data for each EOS ID in the list
   for (int current_eos_id : eos_id_list) {
     std::string mat_group_subpath;  // e.g., "mat100"
-    std::string file_stub_rel_path = get_eos_relative_path_stub(
-        current_eos_id, mat_group_subpath);  // e.g. "mat100/eos10000"
+    std::string file_stub_rel_path =
+        get_eos_relative_path_stub(current_eos_id, mat_group_subpath);
+    if (file_stub_rel_path.find("unknown") != std::string::npos ||
+        file_stub_rel_path.empty()) {  // Error from get_eos_relative_path_stub
+      std::cerr << "Error (EquationOfStateV1::initialize): Could not form "
+                   "valid path stub for EOS ID "
+                << current_eos_id << std::endl;
+      continue;  // Skip this problematic ID
+    }
 
     std::string dat_file_rel_path = file_stub_rel_path + ".dat";
     std::string h5_file_rel_path = file_stub_rel_path + ".h5";
 
-    std::string full_param_file_path;
+    std::string full_param_file_path_found;
     std::string chosen_relative_param_path;
-    std::string file_extension_found;
+    std::string model_type_str;
 
     std::string full_dat_path =
         EOSUtils::simple_path_join(eos_data_dir, dat_file_rel_path);
     std::string full_h5_path =
         EOSUtils::simple_path_join(eos_data_dir, h5_file_rel_path);
 
-    std::ifstream test_dat_file(full_dat_path);
-    if (test_dat_file.is_open()) {
-      test_dat_file.close();
-      full_param_file_path = full_dat_path;
+    std::ifstream test_open_dat(full_dat_path);
+    if (test_open_dat.is_open()) {
+      test_open_dat.close();
+      full_param_file_path_found = full_dat_path;
       chosen_relative_param_path = dat_file_rel_path;
-      file_extension_found = "dat";
-      std::cout << "Found material parameter file: " << full_param_file_path
-                << std::endl;
-    } else {
-      std::ifstream test_h5_file(full_h5_path);
-      if (test_h5_file
-              .is_open()) {  // Basic existence check, HDF5 lib will truly open
-        test_h5_file.close();
-        full_param_file_path = full_h5_path;
-        chosen_relative_param_path = h5_file_rel_path;
-        file_extension_found = "h5";
-        std::cout << "Found material parameter file: " << full_param_file_path
-                  << std::endl;
-      }
-    }
 
-    if (full_param_file_path.empty()) {
-      // Special check for hardcoded/registered analytic IDs that don't need a
-      // file This logic was in previous version of initialize, may need to be
-      // adapted if (analytic_eos_registry_.count(current_eos_id)) { ... handle
-      // ... continue; } For now, assume AnalyticEOS will also have a (possibly
-      // minimal) .dat file
-      std::cerr << "Error: No parameter file (.dat or .h5) found for EOS ID "
-                << current_eos_id << " using stub " << file_stub_rel_path
-                << std::endl;
-      // return EOS_ERROR_FILE_NOT_FOUND; // Or collect errors
-      continue;  // Skip this ID
-    }
-
-    // Determine model_type_str
-    std::string model_type_str;
-    if (file_extension_found == "h5") {
-      // Read model_type_str from a specific dataset in the HDF5 file
-      hid_t pfile_id =
-          H5Fopen(full_param_file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-      if (pfile_id < 0) { /* ... error ... */
-        continue;
-      }
-      // Assume helper for reading string dataset like "/model_info/type_name"
-      // or "/model_type" For now, using a placeholder name, adjust to your HDF5
-      // structure. static bool read_hdf5_scalar_vlen_string_dataset(hid_t
-      // file_id, const char* dset_name, std::string& out_str)
-      if (!HDF5Utils::read_hdf5_scalar_vlen_string_dataset(
-              pfile_id, "/model_info/type_name",
-              model_type_str)) {  // Use EOSUtils if moved
-        std::cerr << "Error: Could not read model type from HDF5 param file: "
-                  << full_param_file_path << std::endl;
-        H5Fclose(pfile_id);
-        continue;
-      }
-      H5Fclose(pfile_id);
-    } else {  // .dat file
-      std::ifstream param_desc_file(full_param_file_path);
+      // Read #MODEL_TYPE from .dat file
+      std::ifstream desc_file(full_param_file_path_found);
       std::string line;
-      bool found_model_type = false;
-      while (std::getline(param_desc_file, line)) {
+      bool found_mt = false;
+      while (std::getline(desc_file, line)) {
         line = EOSUtils::trim_string(line);
         std::string prefix = "#MODEL_TYPE:";
         if (line.rfind(prefix, 0) == 0) {
           model_type_str = EOSUtils::trim_string(line.substr(prefix.length()));
-          found_model_type = true;
+          found_mt = true;
           break;
         }
       }
-      param_desc_file.close();
-      if (!found_model_type) {
-        std::cerr << "Error: #MODEL_TYPE: not found in text param file: "
-                  << full_param_file_path << std::endl;
-        continue;
+      if (!found_mt) {
+        std::cerr << "Error: #MODEL_TYPE not found in "
+                  << full_param_file_path_found << std::endl;
+        continue;  // Skip this file
+      }
+    } else {
+      // Try .h5 file (basic existence check, HDF5 lib will truly open it later)
+      std::ifstream test_open_h5(
+          full_h5_path, std::ios::binary);  // Open H5 for existence check
+      if (test_open_h5.is_open()) {
+        test_open_h5.close();
+        full_param_file_path_found = full_h5_path;
+        chosen_relative_param_path = h5_file_rel_path;
+
+        // Read model_type_str from HDF5 file (e.g., dataset
+        // "/model_info/type_name") This requires opening the HDF5 file just for
+        // this.
+        hid_t pfile_id = H5Fopen(full_param_file_path_found.c_str(),
+                                 H5F_ACC_RDONLY, H5P_DEFAULT);
+        if (pfile_id < 0) {
+          std::cerr << "Error: Could not open HDF5 param file for type read: "
+                    << full_param_file_path_found << std::endl;
+          continue;
+        }
+        // Ensure EOSUtils::read_hdf5_scalar_vlen_string_dataset is correctly
+        // namespaced and available
+        if (!HDF5Utils::read_hdf5_scalar_vlen_string_dataset(
+                pfile_id, "/model_info/type_name", model_type_str)) {
+          std::cerr << "Error: Could not read /model_info/type_name from HDF5 "
+                       "param file: "
+                    << full_param_file_path_found << std::endl;
+          H5Fclose(pfile_id);
+          continue;
+        }
+        H5Fclose(pfile_id);
       }
     }
+
+    if (full_param_file_path_found.empty()) {
+      std::cerr << "Error: No parameter file (.dat or .h5) found for EOS ID "
+                << current_eos_id << " (stub: " << file_stub_rel_path << ")"
+                << std::endl;
+      continue;
+    }
     if (model_type_str.empty()) {
-      std::cerr << "Error: Failed to determine model type for "
-                << chosen_relative_param_path << std::endl;
+      std::cerr << "Error: Could not determine model type for EOS ID "
+                << current_eos_id << " from file " << chosen_relative_param_path
+                << std::endl;
       continue;
     }
     std::transform(model_type_str.begin(), model_type_str.end(),
@@ -541,17 +380,15 @@ int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list,
 
     // Factory logic
     std::unique_ptr<MaterialEOS> material_ptr = nullptr;
-    std::string material_name = file_stub_rel_path;  // Use stub as a base name
+    std::string material_name =
+        chosen_relative_param_path;  // Use relative path as a base name
 
-    // Ensure model_type_str is normalized (e.g. lowercase) before comparison
     if (model_type_str == "complicated_legacy_text") {
       material_ptr =
           std::make_unique<ComplicatedLegacyEOS>(current_eos_id, material_name);
-    } else if (model_type_str ==
-               "polynomial_v1_hdf5") {  // This string must match what's in HDF5
+    } else if (model_type_str == "polynomial_v1_hdf5") {
       material_ptr = std::make_unique<PolyEOS>(current_eos_id, material_name);
-    } else if (model_type_str ==
-               "analytic_air_2000") {  // Match types for AnalyticEOS
+    } else if (model_type_str == "analytic_air_2000") {
       material_ptr = std::make_unique<AnalyticEOS>(
           current_eos_id, AnalyticEOS::AnalyticForm::AIR_2000, material_name);
     } else if (model_type_str == "analytic_carbon_2001") {
@@ -566,67 +403,87 @@ int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list,
     }
 
     if (material_ptr) {
+      // Determine if this model type inherently needs TFD
       bool model_needs_tfd =
           (dynamic_cast<ComplicatedLegacyEOS*>(material_ptr.get()) != nullptr);
-      int mat_init_stat = material_ptr->initialize(
-          full_param_file_path, eos_data_dir,
-          (model_needs_tfd ? tfd_data_.get() : nullptr));
-      if (mat_init_stat == EOS_SUCCESS) {
+
+      const EOS_Internal::TFDMatrices* tfd_to_pass = nullptr;
+      if (model_needs_tfd) {
+        if (!tfd_data_ || !tfd_data_->initialized) {
+          std::cerr << "Error: TFD data required by model type '"
+                    << model_type_str << "' for EOS ID " << current_eos_id
+                    << " but TFD is not initialized." << std::endl;
+          continue;
+        }
+        tfd_to_pass = tfd_data_.get();
+      }
+
+      int mat_init_stat = material_ptr->initialize(full_param_file_path_found,
+                                                   eos_data_dir, tfd_to_pass);
+      if (mat_init_stat ==
+          EOS_SUCCESS) {  // Assuming derived init returns EOS_SUCCESS
         loaded_materials_[current_eos_id] = std::move(material_ptr);
         std::cout << "Successfully initialized EOS ID " << current_eos_id
                   << " (Type: " << model_type_str << ")" << std::endl;
       } else {
         std::cerr << "Error: Failed to initialize MaterialEOS for ID "
-                  << current_eos_id << " from file "
-                  << chosen_relative_param_path << ". Status: " << mat_init_stat
-                  << std::endl;
-        // return EOS_ERROR_MATERIAL_INIT_FAILED; // Or collect errors
+                  << current_eos_id << ". File: " << chosen_relative_param_path
+                  << ". Status: " << mat_init_stat << std::endl;
       }
     }
   }  // end for eos_id_list
 
+  if (loaded_materials_.empty() && !eos_id_list.empty()) {
+    std::cerr << "Warning: No EOS models were successfully loaded from the "
+                 "provided list."
+              << std::endl;
+    // Depending on policy, this could be an error.
+  }
   return EOS_SUCCESS;
 }
 
 int EquationOfStateV1::check_eos_data_dir(
-    const std::string& eos_data_dir, const std::vector<int>& eos_ids_to_check) {
-  // Check TFD files
-  std::string tfd_files_to_check[2] = {"tfd_ver1.h5", "tfd_ver2.h5"};
-
-  for (const std::string& tfd_suffix : tfd_files_to_check) {
-    std::string tfd_path_str = EOSUtils::simple_path_join(eos_data_dir, tfd_suffix);
-    std::ifstream test_file(tfd_path_str);
-    if (!test_file.is_open()) {
-      std::cerr << "Check Error: TFD file not found or not accessible: "
-                << tfd_path_str << std::endl;
+    const std::string& eos_data_dir_root,
+    const std::vector<int>& eos_ids_to_check) {
+  // Check TFD HDF5 files
+  std::string tfd_hdf5_files_to_check[2] = {"tfd_ver1.h5", "tfd_ver2.h5"};
+  for (const std::string& tfd_suffix : tfd_hdf5_files_to_check) {
+    std::string tfd_path_str =
+        EOSUtils::simple_path_join(eos_data_dir_root, tfd_suffix);
+    std::ifstream test_file(tfd_path_str, std::ios::binary);
+    if (!test_file.is_open()) { /* ... error ... */
       return EOS_ERROR_FILE_NOT_FOUND;
     }
     test_file.close();
   }
 
-  // Check specific EOS ID files
+  // Check specific EOS ID files (probe for .dat then .h5)
   for (int id : eos_ids_to_check) {
-    if (analytic_eos_registry_.count(id)) {
-      std::cout << "Check Info: Analytic EOS ID " << id
-                << " is registered, file existence check skipped/optional."
-                << std::endl;
+    std::string mat_group_subpath;
+    std::string file_stub_rel =
+        get_eos_relative_path_stub(id, mat_group_subpath);
+    if (file_stub_rel.find("unknown") != std::string::npos ||
+        file_stub_rel.empty())
       continue;
-    }
-    std::string file_path_str = EOSUtils::get_eos_file_path(eos_data_dir, id);
-    if (file_path_str.empty()) {
-      std::cerr << "Check Error: Could not construct path for EOS ID " << id
-                << std::endl;
-      return EOS_ERROR_FILE_NOT_FOUND;  // Or a different error code
-    }
-    std::ifstream eos_file(file_path_str);
-    if (!eos_file.is_open()) {
-      std::cerr << "Check Error: EOS data file not found for ID " << id
-                << " at " << file_path_str << std::endl;
+
+    std::string dat_path_str =
+        EOSUtils::simple_path_join(eos_data_dir_root, file_stub_rel + ".dat");
+    std::string h5_path_str =
+        EOSUtils::simple_path_join(eos_data_dir_root, file_stub_rel + ".h5");
+
+    std::ifstream test_dat(dat_path_str);
+    std::ifstream test_h5(h5_path_str, std::ios::binary);
+
+    if (!test_dat.is_open() && !test_h5.is_open()) {
+      std::cerr << "Check Error: EOS param file (.dat or .h5) not found for ID "
+                << id << " (stub: " << file_stub_rel << ")" << std::endl;
       return EOS_ERROR_FILE_NOT_FOUND;
     }
-    eos_file.close();
+    if (test_dat.is_open()) test_dat.close();
+    if (test_h5.is_open()) test_h5.close();
   }
-  std::cout << "check_eos_data_dir: All checked files appear accessible."
+  std::cout << "check_eos_data_dir: All checked TFD files found and param "
+               "files (.dat or .h5) exist."
             << std::endl;
   return EOS_SUCCESS;
 }
@@ -721,7 +578,8 @@ int EquationOfStateV1::pack_data(char*& buffer, int& buffer_size) const {
   //
   // // --- Mode 2: Pack data if buffer is sufficient ---
   // if (buffer_size < required_size) {
-  //   std::cerr << "Pack Error: Provided buffer too small. Need " << required_size
+  //   std::cerr << "Pack Error: Provided buffer too small. Need " <<
+  //   required_size
   //             << ", got " << buffer_size << std::endl;
   //   return -1;  // Or a specific error code for buffer too small
   // }
@@ -759,7 +617,8 @@ int EquationOfStateV1::pack_data(char*& buffer, int& buffer_size) const {
   // buffer_size = static_cast<int>(current_ptr - buffer);  // Actual size used
   // if (buffer_size != required_size) {
   //   // This should ideally not happen if logic is correct
-  //   std::cerr << "Pack Error: Mismatch in calculated vs packed size. Packed: "
+  //   std::cerr << "Pack Error: Mismatch in calculated vs packed size. Packed:
+  //   "
   //             << buffer_size << ", Required: " << required_size << std::endl;
   //   return -2;  // Packing logic error
   // }
@@ -859,24 +718,28 @@ int EquationOfStateV1::unpack_data(const char* buffer, int buffer_size) {
   //     unpack_vector_data(current_ptr, md.params, num_params);
   //   }
   //
-  //   // Re-establish analytic_func pointer based on internal_type and eos_id_key
+  //   // Re-establish analytic_func pointer based on internal_type and
+  //   eos_id_key
   //   // This relies on analytic_eos_registry_ being populated (e.g. in
-  //   // constructor) Or, find it in the registry by the unpacked md.eos_id_key.
-  //   auto reg_it = analytic_eos_registry_.find(md.eos_id_key);
+  //   // constructor) Or, find it in the registry by the unpacked
+  //   md.eos_id_key. auto reg_it = analytic_eos_registry_.find(md.eos_id_key);
   //   if (reg_it != analytic_eos_registry_.end()) {
   //     // Cross-check if internal_type matches what's in registry for this ID
   //     if (reg_it->second.internal_type == md.internal_type) {
   //       md.analytic_func = reg_it->second.func_ptr;
   //     } else {
-  //       std::cerr << "Unpack Warning: Mismatch in unpacked internal_type for "
+  //       std::cerr << "Unpack Warning: Mismatch in unpacked internal_type for
+  //       "
   //                    "analytic EOS ID "
-  //                 << md.eos_id_key << ". Using registry's type." << std::endl;
+  //                 << md.eos_id_key << ". Using registry's type." <<
+  //                 std::endl;
   //       md.internal_type = reg_it->second.internal_type;  // Prefer registry
   //       md.analytic_func = reg_it->second.func_ptr;
   //     }
   //   } else if (md.internal_type == InternalEOSType::ANALYTIC_AIR ||
   //              md.internal_type == InternalEOSType::ANALYTIC_CARBON) {
-  //     // This case should ideally not happen if eos_id_key was used for registry
+  //     // This case should ideally not happen if eos_id_key was used for
+  //     registry
   //     // lookup
   //     std::cerr << "Unpack Error: Unpacked analytic EOS ID " << md.eos_id_key
   //               << " not found in registry, but type suggests it's analytic."
@@ -904,7 +767,8 @@ int EquationOfStateV1::unpack_data(const char* buffer, int buffer_size) {
   // if (current_ptr != buffer_end) {
   //   std::cerr
   //       << "Unpack Warning: " << (buffer_end - current_ptr)
-  //       << " bytes remaining in buffer after unpack. Expected to consume all "
+  //       << " bytes remaining in buffer after unpack. Expected to consume all
+  //       "
   //       << buffer_size << " bytes." << std::endl;
   //   // This might be an error depending on strictness.
   // }
