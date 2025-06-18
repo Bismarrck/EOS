@@ -6,6 +6,8 @@ add_library(EquationOfStateV1_lib STATIC
         eos_c_api.cpp
         utils/string_utils.cpp
         utils/checksum_utils.cpp
+        utils/parser_utils.cpp
+        utils/hdf5_utils.cpp
 )
 
 set_target_properties(EquationOfStateV1_lib PROPERTIES
