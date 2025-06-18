@@ -1,5 +1,6 @@
 // src/cpp/eos_c_api.cpp
 #include "EquationOfStateV1.h" // Your main C++ class header
+#include "eos_error_codes.h"
 #include <string>
 #include <vector>
 #include <memory>   // For std::unique_ptr

@@ -7,6 +7,7 @@
 #include <iomanip> // For std::stod in a robust way if needed
 #include "EquationOfStateV1.h"
 #include "utils/string_utils.h"
+#include "eos_error_codes.h"
 
 
 struct NumericalTestCase {
