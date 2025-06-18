@@ -101,7 +101,10 @@ endif()
 # --- Installation Rules ---)
 
 # Install C++ headers
-install(FILES src/cpp/EquationOfStateV1.h src/cpp/utils/string_utils.h
+install(FILES
+        src/cpp/EquationOfStateV1.h
+        src/cpp/utils/string_utils.h
+        src/cpp/materials/MaterialEOS.h
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/EOSCore"
         COMPONENT DevelopmentHeaders
 )
