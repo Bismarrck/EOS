@@ -6,6 +6,7 @@ add_library(eos_fortran_core_obj OBJECT
         module_tfd_eos.f90
         fortran_c_wrappers.f90
         module_eos_fortran_interface.f90
+        module_poly_eos.f90
 )
 
 set_target_properties(eos_fortran_core_obj PROPERTIES

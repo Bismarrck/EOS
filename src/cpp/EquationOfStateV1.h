@@ -19,34 +19,9 @@ struct TFDMatrices;
 // Forward declare Fortran-interfacing functions (actual definitions in .cpp)
 // These are the C names given in BIND(C, name='...')
 extern "C" {
-void c_air_eos_2000(double rho, double T, double* P, double* E, int* istat_out);
-void c_carbon_eos_2001(double rho, double T, double* P, double* E,
-                       int* istat_out);
-
 void c_set_complicated_eos_use_old_cold_term(bool value, int* istat_out);
 void c_set_use_tfd_data_ver1(bool value, int* istat_out);
 // bool c_get_use_tfd_data_ver1(int* istat_out); // If getter is implemented
-}
-
-extern "C" {
-// Assuming fixed dimensions 100x50 for now in the C wrapper arguments
-// If dimensions can vary and need to be passed, the signature would change.
-void c_tfd_eos_compute(
-    double rho, double T, const double* matrix_a_flat,
-    const double* matrix_b_flat,  // Pass as flat arrays
-    int dim1_a, int dim2_a,       // Dimensions of A
-    int dim1_b, int dim2_b,       // Dimensions of B
-    double* tfd_result_x, double* tfd_result_y,
-    int* istat_out);  // Good practice to always have an istat
-}
-
-// New extern "C" for Complicated EOS
-extern "C" {
-void c_complicated_eos(const double* params, int num_params, double rho,
-                       double T, const double* matrix_a_flat, int n1_a,
-                       int n2_a, const double* matrix_b_flat, int n1_b,
-                       int n2_b, double* P, double* E, double* dPdT,
-                       double* dEdT, double* dPdrho, int* istat_out);
 }
 
 class EquationOfStateV1 {
@@ -128,21 +103,6 @@ class EquationOfStateV1 {
 
  private:
   // --- Private Helper Methods ---
-
-  // HDF5 Helper (can be static or non-static member)
-  static herr_t read_hdf5_dataset_double(hid_t file_id, const char* dset_name,
-                                         int expected_n1, int expected_n2,
-                                         std::vector<double>& out_data);
-  static herr_t read_hdf5_scalar_int(hid_t file_id, const char* dset_name,
-                                     int& out_val);
-
-  // C++ shim functions for specific analytic EOS, these call the extern "C"
-  // Fortran wrappers They are bound to std::function in the MaterialData
-  static int call_air_eos_2000_shim(double rho, double T, double& P, double& E);
-  static int call_carbon_eos_2001_shim(double rho, double T, double& P,
-                                       double& E);
-  // Note: If analytic functions also produce derivatives, their shims and
-  // AnalyticEOSFunc signature would change.
 
   // Helpers for parsing filenames and model types (can be static or in
   // EOSUtils)

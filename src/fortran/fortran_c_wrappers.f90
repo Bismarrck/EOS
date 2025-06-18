@@ -5,6 +5,7 @@ MODULE eos_c_wrappers
     USE module_global_controls    ! To access control variables
     USE module_tfd_eos            ! To access TFD
     USE module_complicated_eos, ONLY: Complicated_EOS
+    USE module_poly_eos
     IMPLICIT NONE
 
 CONTAINS
@@ -177,16 +178,17 @@ CONTAINS
 
     END SUBROUTINE c_complicated_eos
 
-    ! --- (Optional) Wrappers for Global Control Variables (Getters) ---
-    ! Example:
-    ! FUNCTION c_get_use_tfd_data_ver1(istat_out) RESULT(res) &
-    !     BIND(C, name='c_get_use_tfd_data_ver1')
-    !     !DEC$ ATTRIBUTES DLLEXPORT :: c_get_use_tfd_data_ver1
-    !     INTEGER(C_INT), INTENT(OUT) :: istat_out
-    !     LOGICAL(C_BOOL) :: res
-    !
-    !     res = use_tfd_data_ver1
-    !     istat_out = 0 ! Success
-    ! END FUNCTION c_get_use_tfd_data_ver1
+    SUBROUTINE c_poly_eos_compute(poly_coeffs, num_coeffs, rho, T, P, E, istat) &
+            BIND(C, name="c_poly_eos_compute")
+        !DEC$ ATTRIBUTES DLLEXPORT :: c_poly_eos_compute
+        INTEGER(C_INT), VALUE, INTENT(IN) :: num_coeffs
+        REAL(C_DOUBLE), INTENT(IN) :: poly_coeffs(num_coeffs)
+        REAL(C_DOUBLE), VALUE, INTENT(IN) :: rho, T
+        REAL(C_DOUBLE), INTENT(OUT) :: P, E
+        INTEGER(C_INT), INTENT(OUT) :: istat
+
+        CALL poly_eos_compute_kernel(poly_coeffs, num_coeffs, rho, T, P, E, istat)
+
+    END SUBROUTINE c_poly_eos_compute
 
 END MODULE eos_c_wrappers

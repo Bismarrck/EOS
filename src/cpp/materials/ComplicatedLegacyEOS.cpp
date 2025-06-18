@@ -7,6 +7,9 @@
 #include <iostream>
 #include <sstream>  // For pack/unpack with stringstream
 
+#include "utils/parser_utils.h"
+#include "eos_error_codes.h"
+
 // Forward declare the C-wrapper from fortran_c_wrappers.f90
 // This should match the BIND(C, name='...') in Fortran
 extern "C" {
@@ -86,7 +89,7 @@ int ComplicatedLegacyEOS::initialize(
   // Use the robust key-value parser (ensure it's accessible, e.g., from
   // EOSUtils) It needs the ifstream, filepath for errors, the order, and output
   // vector.
-  int parse_stat = EOSUtils::parse_complicated_eos_params(
+  int parse_stat = EOSParserUtils::parse_complicated_eos_params(
       param_file, material_param_filepath, s_param_order_, params_);
   param_file.close();
 

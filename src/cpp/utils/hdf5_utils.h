@@ -2,6 +2,7 @@
 #define HDF5_UTILS_H_H
 
 #include <hdf5.h>
+
 #include <string>
 #include <vector>
 
@@ -10,6 +11,9 @@ namespace HDF5Utils {
 // --- HDF5 Helper Implementations ---
 herr_t read_hdf5_scalar_int(hid_t group_id_or_file_id, const char *dset_name,
                             int &out_val);
+
+herr_t read_hdf5_scalar_double(hid_t group_id_or_file_id, const char *dset_name,
+                               double &out_val);
 
 herr_t read_hdf5_dataset_double(hid_t file_id, const char *dset_name,
                                 int expected_n1, int expected_n2,

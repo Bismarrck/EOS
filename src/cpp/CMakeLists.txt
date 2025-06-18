@@ -4,6 +4,9 @@
 add_library(EquationOfStateV1_lib STATIC
         EquationOfStateV1.cpp
         eos_c_api.cpp
+        materials/ComplicatedLegacyEOS.cpp
+        materials/PolyEOS.cpp
+        materials/AnalyticEOS.cpp
         utils/string_utils.cpp
         utils/checksum_utils.cpp
         utils/parser_utils.cpp

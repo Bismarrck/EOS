@@ -23,6 +23,25 @@ herr_t HDF5Utils::read_hdf5_scalar_int(hid_t group_id_or_file_id,
   return status;
 }
 
+herr_t HDF5Utils::read_hdf5_scalar_double(hid_t group_id_or_file_id,
+                                          const char *dset_name,
+                                          double &out_val) {
+  hid_t dset_id = H5Dopen2(group_id_or_file_id, dset_name, H5P_DEFAULT);
+  if (dset_id < 0) {
+    std::cerr << "HDF5 Error: Could not open integer dataset '" << dset_name
+              << "'" << std::endl;
+    return -1;  // Indicate error
+  }
+  herr_t status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+                          H5P_DEFAULT, &out_val);
+  if (status < 0) {
+    std::cerr << "HDF5 Error: Could not read integer dataset '" << dset_name
+              << "'" << std::endl;
+  }
+  H5Dclose(dset_id);
+  return status;
+}
+
 herr_t HDF5Utils::read_hdf5_dataset_double(hid_t file_id, const char *dset_name,
                                            int expected_n1, int expected_n2,
                                            std::vector<double> &out_data) {

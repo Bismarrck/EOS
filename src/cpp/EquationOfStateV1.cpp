@@ -71,23 +71,6 @@ int EquationOfStateV1::parse_eos_id_from_filename_stub(
   return -1;  // Indicate failure to parse ID
 }
 
-// --- Shim Implementations ---
-int EquationOfStateV1::call_air_eos_2000_shim(double rho, double T, double& P,
-                                              double& E) {
-  int istat;
-  // Outputs for dPdT etc. are not provided by this analytic EOS, so pass
-  // dummies or handle if API changes
-  c_air_eos_2000(rho, T, &P, &E, &istat);
-  return istat;
-}
-
-int EquationOfStateV1::call_carbon_eos_2001_shim(double rho, double T,
-                                                 double& P, double& E) {
-  int istat;
-  c_carbon_eos_2001(rho, T, &P, &E, &istat);
-  return istat;
-}
-
 EquationOfStateV1::EquationOfStateV1()
     : tfd_data_(std::make_unique<EOS_Internal::TFDMatrices>()) {  // Default TFD
                                                                   // version
@@ -185,14 +168,16 @@ int EquationOfStateV1::loadTFDDataInternal(const std::string& hdf5_filepath) {
     return EOS_ERROR_FILE_PARSE;  // Or HDF5 specific
   }
 
-  status = read_hdf5_scalar_int(common_dims_group_id, "N1", tfd_data_->N1);
+  status = HDF5Utils::read_hdf5_scalar_int(common_dims_group_id, "N1",
+                                           tfd_data_->N1);
   if (status < 0) {
     H5Gclose(common_dims_group_id);
     H5Fclose(file_id);
     H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data);
     return EOS_ERROR_FILE_PARSE;
   }
-  status = read_hdf5_scalar_int(common_dims_group_id, "N2", tfd_data_->N2);
+  status = HDF5Utils::read_hdf5_scalar_int(common_dims_group_id, "N2",
+                                           tfd_data_->N2);
   if (status < 0) {
     H5Gclose(common_dims_group_id);
     H5Fclose(file_id);
@@ -224,8 +209,8 @@ int EquationOfStateV1::loadTFDDataInternal(const std::string& hdf5_filepath) {
 
   // Assuming MatrixA and MatrixB are top-level datasets in the HDF5 file for
   // now
-  status = read_hdf5_dataset_double(file_id, "/matrix_A", tfd_data_->N1,
-                                    tfd_data_->N2, tfd_data_->matrix_A);
+  status = HDF5Utils::read_hdf5_dataset_double(
+      file_id, "/matrix_A", tfd_data_->N1, tfd_data_->N2, tfd_data_->matrix_A);
   if (status < 0) {
     H5Fclose(file_id);
     H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data);
@@ -233,8 +218,8 @@ int EquationOfStateV1::loadTFDDataInternal(const std::string& hdf5_filepath) {
   }
   std::cout << "HDF5: Successfully read Matrix A." << std::endl;
 
-  status = read_hdf5_dataset_double(file_id, "/matrix_B", tfd_data_->N1,
-                                    tfd_data_->N2, tfd_data_->matrix_B);
+  status = HDF5Utils::read_hdf5_dataset_double(
+      file_id, "/matrix_B", tfd_data_->N1, tfd_data_->N2, tfd_data_->matrix_B);
   if (status < 0) {
     H5Fclose(file_id);
     H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data);
