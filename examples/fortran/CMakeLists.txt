@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(FortranEOSDemo LANGUAGES Fortran)
+project(FortranEOSDemo LANGUAGES Fortran C CXX)
 
 # Source file for the main example program
 set(MAIN_F90_SRC main.f90)
