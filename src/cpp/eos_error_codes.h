@@ -17,5 +17,8 @@ constexpr int EOS_ERROR_UNKNOWN_EOS_ID = 21;
 constexpr int EOS_ERROR_INVALID_EOS_TYPE = 22;
 constexpr int EOS_ERROR_PARAMS_NOT_LOADED = 23;
 constexpr int EOS_ERROR_ANALYTIC_DISPATCH = 24;
+constexpr int EOS_ERROR_BUFFER_TOO_SMALL = 25;
+constexpr int EOS_ERROR_UNPACK_FAILED = 26;
+constexpr int EOS_ERROR_UNKNOWN_MODEL_TYPE_IN_FILE = 27;
 
 #endif //EOS_ERROR_CODES_H

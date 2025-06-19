@@ -51,14 +51,6 @@ int PolyEOS::initialize(
   }
 
   // Read parameters specific to PolyEOS from the HDF5 file
-  // Example: coefficients from a dataset named
-  // "/coefficients/poly_coeffs_array" Example: validity range from
-  // "/validity/rho_min" and "/validity/rho_max"
-
-  // Read polynomial coefficients (assuming they are in a 1D dataset)
-  // This requires knowing the dataset path and its structure.
-  // Let's assume a dataset "/polynomial/coefficients" which is a 1D array of
-  // doubles.
   hid_t dset_id = H5Dopen2(file_id, "/polynomial/coefficients",
                            H5P_DEFAULT);  // Example path
   if (dset_id < 0) {
@@ -134,15 +126,6 @@ int PolyEOS::compute(double rho, double T, double& P_out, double& E_out,
               << eos_id_ << std::endl;
     return MAT_EOS_COMPUTE_FAILED;
   }
-
-  // Optional: Check rho, T against rho_min_validity_, etc.
-  // if (rho < rho_min_validity_ || rho > rho_max_validity_) {
-  //     std::cout << "Warning (PolyEOS::compute): rho=" << rho << " is outside
-  //     validity range ["
-  //               << rho_min_validity_ << ", " << rho_max_validity_ << "]" <<
-  //               std::endl;
-  //     // Decide on behavior: error, extrapolate, or proceed with caution
-  // }
 
   int istat_fortran;
   dPdrho_out = 0.0;
