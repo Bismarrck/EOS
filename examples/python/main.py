@@ -41,15 +41,13 @@ except ImportError as e:
 
 print(f"Successfully imported PyEOS version (pybind11 version): {PyEOS.__doc__}") # __doc__ from module
 
-def print_py_eos_results(eos_id, results_tuple, istat_implicit=0):
-    # results_tuple is (P, E, dPdT, dEdT, dPdrho)
-    # istat is handled by exceptions in the binding layer
+def print_py_eos_results(eos_id, result, istat_implicit=0):
     print(f"  EOS ID {eos_id} SUCCESS:")
-    print(f"    P      = {results_tuple[0]:.5f}")
-    print(f"    E      = {results_tuple[1]:.5f}")
-    print(f"    dPdT   = {results_tuple[2]:.5f}")
-    print(f"    dEdT   = {results_tuple[3]:.5f}")
-    print(f"    dPdrho = {results_tuple[4]:.5f}")
+    print(f"    P      = {result.P:.5f}")
+    print(f"    E      = {result.E:.5f}")
+    print(f"    dPdT   = {result.dPdT:.5f}")
+    print(f"    dEdT   = {result.dEdT:.5f}")
+    print(f"    dPdrho = {result.dPdrho:.5f}")
 
 def main():
     print("\nPython Example: Starting EOS Test")
@@ -141,8 +139,8 @@ def main():
 
         # Basic check if P and E match (use a tolerance for floats)
         tolerance = 1e-9
-        if (abs(results_original[0] - results_unpacked[0]) < tolerance and
-                abs(results_original[1] - results_unpacked[1]) < tolerance):
+        if (abs(results_original.P - results_unpacked.P) < tolerance and
+                abs(results_original.E - results_unpacked.E) < tolerance):
             print("Verification: Pack/Unpack successful, computation results match for ID 10000.")
         else:
             print("Verification ERROR: Pack/Unpack results DO NOT match for ID 10000.")

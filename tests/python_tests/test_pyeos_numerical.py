@@ -82,11 +82,11 @@ def test_eos_numerical_py(tc):
         pytest.fail(f"Initialization failed for {tc['description']}: {e}")
 
     try:
-        P_calc, E_calc, dPdT_calc, dEdT_calc, dPdrho_calc = eos.compute(tc['eos_id'], tc['rho'], tc['T'])
+        result = eos.compute(tc['eos_id'], tc['rho'], tc['T'])
     except RuntimeError as e:
         pytest.fail(f"Compute failed for {tc['description']}: {e}")
 
     rel_tol = 1e-7
     abs_tol = 1e-9
-    assert math.isclose(P_calc, tc['ref_P'], rel_tol=rel_tol, abs_tol=abs_tol), f"P mismatch for {tc['description']}"
-    assert math.isclose(E_calc, tc['ref_E'], rel_tol=rel_tol, abs_tol=abs_tol), f"E mismatch for {tc['description']}"
+    assert math.isclose(result.P, tc['ref_P'], rel_tol=rel_tol, abs_tol=abs_tol), f"P mismatch for {tc['description']}"
+    assert math.isclose(result.E, tc['ref_E'], rel_tol=rel_tol, abs_tol=abs_tol), f"E mismatch for {tc['description']}"
