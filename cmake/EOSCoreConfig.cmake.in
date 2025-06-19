@@ -1,5 +1,6 @@
 @PACKAGE_INIT@
 
+include(CMakeFindDependencyMacro)
 find_dependency(HDF5 REQUIRED COMPONENTS C HL)
 
 # Define a variable pointing to the installed Fortran interface module source(s) directory
