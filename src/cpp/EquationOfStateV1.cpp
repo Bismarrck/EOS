@@ -23,54 +23,6 @@
 #include "utils/hdf5_utils.h"
 #include "utils/string_utils.h"
 
-std::string EquationOfStateV1::get_eos_relative_path_stub(
-    int eos_id_full, std::string& out_material_group_subpath) {
-  std::ostringstream eos_id_ss;
-  eos_id_ss << std::setw(5) << std::setfill('0') << eos_id_full;
-  std::string eos_id_str = eos_id_ss.str();
-
-  if (eos_id_str.length() < 3) {
-    out_material_group_subpath = "matunknown";  // Or handle error
-    return "eos" + eos_id_str;  // Or return empty string on error
-  }
-  out_material_group_subpath = "mat" + eos_id_str.substr(0, 3);
-  return out_material_group_subpath + "/eos" + eos_id_str;
-}
-
-// Parses "XXXXX" from "eosXXXXX" part of a filename (without extension)
-int EquationOfStateV1::parse_eos_id_from_filename_stub(
-    const std::string& filename_stub) {
-  // Assuming filename_stub is like "eos10000"
-  if (filename_stub.rfind("eos", 0) == 0 &&
-      filename_stub.length() == 8) {  // "eos" + 5 digits
-    try {
-      return std::stoi(filename_stub.substr(3));
-    } catch (const std::exception&) {
-      return -1;  // Invalid format
-    }
-  }
-  // Fallback for other naming or if parsing from full relative path
-  // This part needs to be robust based on your actual relative_path format.
-  // If relative_path is "mat100/eos10000.dat", extract "10000".
-  size_t last_slash = filename_stub.find_last_of("/\\");
-  std::string basename = (last_slash == std::string::npos)
-                             ? filename_stub
-                             : filename_stub.substr(last_slash + 1);
-  if (basename.rfind("eos", 0) == 0) {
-    size_t dot_pos = basename.find_first_of('.');
-    std::string id_part = (dot_pos == std::string::npos)
-                              ? basename.substr(3)
-                              : basename.substr(3, dot_pos - 3);
-    if (id_part.length() == 5) {
-      try {
-        return std::stoi(id_part);
-      } catch (const std::exception&) {
-      }
-    }
-  }
-  return -1;  // Indicate failure to parse ID
-}
-
 EquationOfStateV1::EquationOfStateV1()
     : tfd_data_(std::make_unique<EOS_Internal::TFDMatrices>()) {  // Default TFD
                                                                   // version
@@ -256,7 +208,7 @@ int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list,
   std::string tfd_relative_filename =
       (tfd_use_ver1_setting_ ? "tfd_ver1.h5" : "tfd_ver2.h5");
   std::string full_tfd_filepath =
-      EOSUtils::simple_path_join(eos_data_dir, tfd_relative_filename);
+      EOStringUtils::simple_path_join(eos_data_dir, tfd_relative_filename);
 
   int tfd_load_stat = loadTFDDataInternal(full_tfd_filepath);
   if (tfd_load_stat != EOS_SUCCESS) {
@@ -269,8 +221,8 @@ int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list,
   // 2. Load data for each EOS ID in the list
   for (int current_eos_id : eos_id_list) {
     std::string mat_group_subpath;  // e.g., "mat100"
-    std::string file_stub_rel_path =
-        get_eos_relative_path_stub(current_eos_id, mat_group_subpath);
+    std::string file_stub_rel_path = EOStringUtils::get_eos_relative_path_stub(
+        current_eos_id, mat_group_subpath);
     if (file_stub_rel_path.find("unknown") != std::string::npos ||
         file_stub_rel_path.empty()) {  // Error from get_eos_relative_path_stub
       std::cerr << "Error (EquationOfStateV1::initialize): Could not form "
@@ -287,9 +239,9 @@ int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list,
     std::string model_type_str;
 
     std::string full_dat_path =
-        EOSUtils::simple_path_join(eos_data_dir, dat_file_rel_path);
+        EOStringUtils::simple_path_join(eos_data_dir, dat_file_rel_path);
     std::string full_h5_path =
-        EOSUtils::simple_path_join(eos_data_dir, h5_file_rel_path);
+        EOStringUtils::simple_path_join(eos_data_dir, h5_file_rel_path);
 
     std::ifstream test_open_dat(full_dat_path);
     if (test_open_dat.is_open()) {
@@ -302,10 +254,11 @@ int EquationOfStateV1::initialize(const std::vector<int>& eos_id_list,
       std::string line;
       bool found_mt = false;
       while (std::getline(desc_file, line)) {
-        line = EOSUtils::trim_string(line);
+        line = EOStringUtils::trim_string(line);
         std::string prefix = "#MODEL_TYPE:";
         if (line.rfind(prefix, 0) == 0) {
-          model_type_str = EOSUtils::trim_string(line.substr(prefix.length()));
+          model_type_str =
+              EOStringUtils::trim_string(line.substr(prefix.length()));
           found_mt = true;
           break;
         }
@@ -434,7 +387,7 @@ int EquationOfStateV1::check_eos_data_dir(
   std::string tfd_hdf5_files_to_check[2] = {"tfd_ver1.h5", "tfd_ver2.h5"};
   for (const std::string& tfd_suffix : tfd_hdf5_files_to_check) {
     std::string tfd_path_str =
-        EOSUtils::simple_path_join(eos_data_dir_root, tfd_suffix);
+        EOStringUtils::simple_path_join(eos_data_dir_root, tfd_suffix);
     std::ifstream test_file(tfd_path_str, std::ios::binary);
     if (!test_file.is_open()) { /* ... error ... */
       return EOS_ERROR_FILE_NOT_FOUND;
@@ -446,15 +399,15 @@ int EquationOfStateV1::check_eos_data_dir(
   for (int id : eos_ids_to_check) {
     std::string mat_group_subpath;
     std::string file_stub_rel =
-        get_eos_relative_path_stub(id, mat_group_subpath);
+        EOStringUtils::get_eos_relative_path_stub(id, mat_group_subpath);
     if (file_stub_rel.find("unknown") != std::string::npos ||
         file_stub_rel.empty())
       continue;
 
-    std::string dat_path_str =
-        EOSUtils::simple_path_join(eos_data_dir_root, file_stub_rel + ".dat");
-    std::string h5_path_str =
-        EOSUtils::simple_path_join(eos_data_dir_root, file_stub_rel + ".h5");
+    std::string dat_path_str = EOStringUtils::simple_path_join(
+        eos_data_dir_root, file_stub_rel + ".dat");
+    std::string h5_path_str = EOStringUtils::simple_path_join(
+        eos_data_dir_root, file_stub_rel + ".h5");
 
     std::ifstream test_dat(dat_path_str);
     std::ifstream test_h5(h5_path_str, std::ios::binary);

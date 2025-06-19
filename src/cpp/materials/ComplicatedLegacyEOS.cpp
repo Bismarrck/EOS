@@ -67,7 +67,7 @@ int ComplicatedLegacyEOS::initialize(
   bool model_type_skipped = false;
   std::streampos original_pos = param_file.tellg();
   while (std::getline(param_file, line)) {
-    std::string temp_line = EOSUtils::trim_string(line);
+    std::string temp_line = EOStringUtils::trim_string(line);
     if (temp_line.rfind("#MODEL_TYPE:", 0) == 0) {
       model_type_skipped = true;
       original_pos = param_file.tellg();  // Mark position after #MODEL_TYPE

@@ -104,13 +104,6 @@ class EquationOfStateV1 {
  private:
   // --- Private Helper Methods ---
 
-  // Helpers for parsing filenames and model types (can be static or in
-  // EOSUtils)
-  static std::string get_eos_relative_path_stub(
-      int eos_id_full, std::string& out_material_group_subpath);
-  static int parse_eos_id_from_filename_stub(
-      const std::string& filename_stub);  // "eosXXXXX" -> XXXXX
-
   // --- Members ---
   std::unique_ptr<EOS_Internal::TFDMatrices> tfd_data_;  // Owns the TFD data
   std::map<int, std::unique_ptr<MaterialEOS>>
