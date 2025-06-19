@@ -1,6 +1,7 @@
 #include "PolyEOS.h"
 
 #include <hdf5.h>
+
 #include <iostream>
 #include <sstream>  // For pack/unpack
 
@@ -93,14 +94,14 @@ int PolyEOS::initialize(
 
   // Example: Read validity range rho_min (scalar double)
   if (HDF5Utils::read_hdf5_scalar_double(file_id, "/validity/rho_min",
-                                        rho_min_validity_) <
+                                         rho_min_validity_) <
       0) {  // You'll need this helper
     std::cout << "Warning (PolyEOS): Could not read /validity/rho_min."
               << std::endl;
     // Set a default or handle as error
   }
   if (HDF5Utils::read_hdf5_scalar_double(file_id, "/validity/rho_max",
-                                        rho_max_validity_) < 0) {
+                                         rho_max_validity_) < 0) {
     std::cout << "Warning (PolyEOS): Could not read /validity/rho_max."
               << std::endl;
   }
@@ -138,35 +139,62 @@ int PolyEOS::compute(double rho, double T, double& P_out, double& E_out,
 }
 
 int PolyEOS::pack_parameters(std::ostream& os) const {
+  // 1. Pack poly_coefficients_
   size_t num_coeffs = poly_coefficients_.size();
   os.write(reinterpret_cast<const char*>(&num_coeffs), sizeof(num_coeffs));
+  if (!os.good()) return MAT_EOS_PACK_FAILED;
   if (num_coeffs > 0) {
     os.write(reinterpret_cast<const char*>(poly_coefficients_.data()),
              num_coeffs * sizeof(double));
+    if (!os.good()) return MAT_EOS_PACK_FAILED;
   }
+
+  // 2. Pack validity range (example members)
   os.write(reinterpret_cast<const char*>(&rho_min_validity_),
            sizeof(rho_min_validity_));
+  if (!os.good()) return MAT_EOS_PACK_FAILED;
   os.write(reinterpret_cast<const char*>(&rho_max_validity_),
            sizeof(rho_max_validity_));
-  // Pack other members...
-  return os.good() ? MAT_EOS_SUCCESS : MAT_EOS_PACK_FAILED;
+  if (!os.good()) return MAT_EOS_PACK_FAILED;
+  // Pack any other PolyEOS specific parameters here...
+
+  return MAT_EOS_SUCCESS;
 }
 
 int PolyEOS::unpack_parameters(std::istream& is) {
   poly_coefficients_.clear();
+  // 1. Unpack poly_coefficients_
   size_t num_coeffs = 0;
   is.read(reinterpret_cast<char*>(&num_coeffs), sizeof(num_coeffs));
   if (!is.good() && num_coeffs > 0) return MAT_EOS_UNPACK_FAILED;
+  if (num_coeffs == 0 && !is.good() && !is.eof()) return MAT_EOS_UNPACK_FAILED;
 
   if (num_coeffs > 0) {
-    poly_coefficients_.resize(num_coeffs);
+    try {
+      poly_coefficients_.resize(num_coeffs);
+    } catch (const std::bad_alloc& e) {
+      std::cerr
+          << "Error (PolyEOS::unpack): Failed to resize poly_coefficients_: "
+          << e.what() << std::endl;
+      return MAT_EOS_UNPACK_FAILED;
+    }
     is.read(reinterpret_cast<char*>(poly_coefficients_.data()),
             num_coeffs * sizeof(double));
+    if (!is.good()) {
+      poly_coefficients_.clear();
+      return MAT_EOS_UNPACK_FAILED;
+    }
   }
+
+  // 2. Unpack validity range
   is.read(reinterpret_cast<char*>(&rho_min_validity_),
           sizeof(rho_min_validity_));
+  if (!is.good()) return MAT_EOS_UNPACK_FAILED;
   is.read(reinterpret_cast<char*>(&rho_max_validity_),
           sizeof(rho_max_validity_));
-  // Unpack other members...
-  return is.good() ? MAT_EOS_SUCCESS : MAT_EOS_UNPACK_FAILED;
+  if (!is.good()) return MAT_EOS_UNPACK_FAILED;
+
+  // Unpack any other PolyEOS specific parameters here...
+
+  return MAT_EOS_SUCCESS;
 }

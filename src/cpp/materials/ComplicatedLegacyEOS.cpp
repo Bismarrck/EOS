@@ -7,8 +7,8 @@
 #include <iostream>
 #include <sstream>  // For pack/unpack with stringstream
 
-#include "utils/parser_utils.h"
 #include "eos_error_codes.h"
+#include "utils/parser_utils.h"
 
 // Forward declare the C-wrapper from fortran_c_wrappers.f90
 // This should match the BIND(C, name='...') in Fortran
@@ -135,27 +135,54 @@ int ComplicatedLegacyEOS::compute(double rho, double T, double& P_out,
 }
 
 int ComplicatedLegacyEOS::pack_parameters(std::ostream& os) const {
-  // Pack num_params, then params data
   size_t num_params = params_.size();
   os.write(reinterpret_cast<const char*>(&num_params), sizeof(num_params));
+  if (!os.good()) return MAT_EOS_PACK_FAILED;
+
   if (num_params > 0) {
     os.write(reinterpret_cast<const char*>(params_.data()),
              num_params * sizeof(double));
+    if (!os.good()) return MAT_EOS_PACK_FAILED;
   }
-  return os.good() ? MAT_EOS_SUCCESS : MAT_EOS_PACK_FAILED;
+  return MAT_EOS_SUCCESS;
 }
 
 int ComplicatedLegacyEOS::unpack_parameters(std::istream& is) {
   params_.clear();
   size_t num_params = 0;
   is.read(reinterpret_cast<char*>(&num_params), sizeof(num_params));
-  if (!is.good() && num_params > 0)
-    return MAT_EOS_UNPACK_FAILED;  // Error reading size if expecting params
+  if (!is.good() && num_params > 0) {  // If expect params but read fails
+    std::cerr
+        << "Error (ComplicatedLegacyEOS::unpack): Failed to read num_params."
+        << std::endl;
+    return MAT_EOS_UNPACK_FAILED;
+  }
+  if (num_params == 0 && !is.good() &&
+      !is.eof()) {  // Read error but num_params could be 0
+    std::cerr << "Error (ComplicatedLegacyEOS::unpack): Stream error after "
+                 "reading num_params=0."
+              << std::endl;
+    return MAT_EOS_UNPACK_FAILED;
+  }
 
   if (num_params > 0) {
-    params_.resize(num_params);
+    try {
+      params_.resize(num_params);  // Can throw std::bad_alloc
+    } catch (const std::bad_alloc& e) {
+      std::cerr << "Error (ComplicatedLegacyEOS::unpack): Failed to resize "
+                   "params vector: "
+                << e.what() << std::endl;
+      return MAT_EOS_UNPACK_FAILED;  // Or specific memory error
+    }
     is.read(reinterpret_cast<char*>(params_.data()),
             num_params * sizeof(double));
+    if (!is.good()) {
+      std::cerr << "Error (ComplicatedLegacyEOS::unpack): Failed to read "
+                << num_params << " parameters." << std::endl;
+      params_.clear();  // Clear partially read data
+      return MAT_EOS_UNPACK_FAILED;
+    }
   }
-  return is.good() ? MAT_EOS_SUCCESS : MAT_EOS_UNPACK_FAILED;
+  // tfd_data_ptr_ will be set by EquationOfStateV1 after this call if needed
+  return MAT_EOS_SUCCESS;
 }
