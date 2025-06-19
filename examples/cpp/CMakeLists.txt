@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(CppEOSDemo main.cpp)
+target_include_directories(CppEOSDemo PRIVATE ${HDF5_INCLUDE_DIRS})
 
 if(EOS_LIBRARY_IS_BUILDING_EXAMPLES)
     # This example is part of the main project build.
@@ -24,7 +25,6 @@ if(EOS_LIBRARY_IS_BUILDING_EXAMPLES)
     target_include_directories(CppEOSDemo PRIVATE
             ${CMAKE_SOURCE_DIR}/src/cpp
             ${CMAKE_SOURCE_DIR}/src/cpp/utils
-            ${HDF5_INCLUDE_DIRS}
     )
 
 else()

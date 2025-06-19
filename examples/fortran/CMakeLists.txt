@@ -20,6 +20,7 @@ if(EOS_LIBRARY_IS_BUILDING_EXAMPLES)
             eos_fortran_core_obj     # For any other Fortran modules used by the interface or main
             # and to propagate .mod include path for module_eos_fortran_interface
     )
+    target_include_directories(FortranEOSDemo PRIVATE ${HDF5_INCLUDE_DIRS})
 
 else()
     # --- Building as a standalone example (e.g., CI testing installed library) ---
@@ -43,7 +44,9 @@ else()
     # When module_eos_fortran_interface.f90 (from installed source) is compiled as part of this target,
     # its .mod file is generated in CMAKE_CURRENT_BINARY_DIR (e.g., build_example_fortran/CMakeFiles/...).
     # main.f90 needs to find it there for its USE statement.
-    target_include_directories(FortranEOSDemo PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    target_include_directories(FortranEOSDemo PRIVATE
+            ${CMAKE_CURRENT_BINARY_DIR}
+            ${HDF5_INCLUDE_DIRS})
 
     # Link against the imported target EOS::EOSCore for the C-API symbols
     target_link_libraries(FortranEOSDemo PRIVATE EOS::EOSCore)

@@ -47,7 +47,8 @@ add_library(EOSCore SHARED
         $<TARGET_OBJECTS:eos_fortran_core_obj>
 )
 set_target_properties(EOSCore PROPERTIES OUTPUT_NAME "EOSCore")
-target_link_libraries(EOSCore PUBLIC EquationOfStateV1_lib) # For usage requirements
+target_link_libraries(EOSCore PUBLIC EquationOfStateV1_lib)             # For usage requirements
+target_link_libraries(EOSCore PRIVATE ${CMAKE_Fortran_LIBRARIES})       #
 
 # This adds EOSCore to the EOSCoreTargets export set AND defines its install rule
 install(TARGETS EOSCore
