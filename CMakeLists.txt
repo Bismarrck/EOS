@@ -21,6 +21,7 @@ include_directories(SYSTEM ${THIRDPARTY_DIR})
 
 # --- Include Package Helpers ---
 include(GNUInstallDirs) # For CMAKE_INSTALL_LIBDIR, CMAKE_INSTALL_INCLUDEDIR
+include(CMakeFindDependencyMacro)
 include(CMakePackageConfigHelpers) # For configure_package_config_file, write_basic_package_version_file
 
 # --- External Dependency: HDF5 ---
