@@ -1,5 +1,6 @@
 #include "parser_utils.h"
 
+#include <algorithm>  // For std::transform
 #include <iostream>
 #include <map>
 #include <sstream>
@@ -59,7 +60,8 @@ int EOSParserUtils::parse_complicated_eos_params(
     if (eq_pos !=
         std::string::npos) {  // This line defines a new key or redefines one
       key_part = EOStringUtils::trim_string(processed_line.substr(0, eq_pos));
-      value_part = EOStringUtils::trim_string(processed_line.substr(eq_pos + 1));
+      value_part =
+          EOStringUtils::trim_string(processed_line.substr(eq_pos + 1));
 
       if (key_part.empty()) {
         std::cerr << "Error (" << file_path_for_error << ":" << line_number
@@ -103,7 +105,8 @@ int EOSParserUtils::parse_complicated_eos_params(
       bool values_found_on_this_line = false;
       while (val_ss >> token) {
         double val_converted;
-        if (!EOStringUtils::string_to_double_fortran_compat(token, val_converted)) {
+        if (!EOStringUtils::string_to_double_fortran_compat(token,
+                                                            val_converted)) {
           std::cerr << "Error (" << file_path_for_error << ":" << line_number
                     << "): Failed to convert value token '" << token
                     << "' for key '" << current_active_key << "'" << std::endl;
