@@ -2,8 +2,6 @@
 #ifndef EQUATIONOFSTATEV1_H
 #define EQUATIONOFSTATEV1_H
 
-#include <hdf5.h>
-
 #include <functional>
 #include <map>
 #include <memory>  // For std::unique_ptr
