@@ -39,23 +39,17 @@ int AnalyticEOS::initialize(const std::string& material_param_filepath,
   return EOS_SUCCESS;
 }
 
-int AnalyticEOS::compute(double rho, double T, double& P_out, double& E_out,
-                         double& dPdT_out, double& dEdT_out,
-                         double& dPdrho_out) const {
-  int istat_fortran = -1;  // Default error
-
+ComputeResult AnalyticEOS::compute(double rho, double T) const {
   // Initialize derivatives to 0 as these simple analytic forms might not
   // provide them
-  dPdT_out = 0.0;
-  dEdT_out = 0.0;
-  dPdrho_out = 0.0;
+  ComputeResult result;
 
   switch (form_) {
     case AnalyticForm::AIR_2000:
-      c_air_eos_2000(rho, T, &P_out, &E_out, &istat_fortran);
+      c_air_eos_2000(rho, T, &result.P, &result.E, &result.istat);
       break;
     case AnalyticForm::CARBON_2001:
-      c_carbon_eos_2001(rho, T, &P_out, &E_out, &istat_fortran);
+      c_carbon_eos_2001(rho, T, &result.P, &result.E, &result.istat);
       break;
     // Add cases for other analytic forms
     case AnalyticForm::UNDEFINED:
@@ -63,11 +57,10 @@ int AnalyticEOS::compute(double rho, double T, double& P_out, double& E_out,
       std::cerr << "Error (AnalyticEOS::compute): Undefined or unsupported "
                    "analytic form for EOS ID "
                 << eos_id_ << std::endl;
-      P_out = 0.0;
-      E_out = 0.0;
-      return EOS_ERROR_INVALID_EOS_TYPE;
+      result.istat = EOS_ERROR_INVALID_EOS_TYPE;
+      break;
   }
-  return istat_fortran;
+  return result;
 }
 
 int AnalyticEOS::pack_parameters(std::ostream& os) const {

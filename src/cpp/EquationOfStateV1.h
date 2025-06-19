@@ -12,6 +12,7 @@
 
 // Forward declare MaterialEOS and TFDMatrices from their new location
 class MaterialEOS;  // Assuming MaterialEOS.h will be included in .cpp
+struct ComputeResult;
 namespace EOS_Internal {
 struct TFDMatrices;
 }
@@ -87,9 +88,7 @@ class EquationOfStateV1 {
       const std::string& hdf5_filepath);  // Takes base dir for TFD files
 
   // --- Computation ---
-  int compute(int eos_id, double rho, double T, double& P, double& E,
-              double& dPdT, double& dEdT,
-              double& dPdrho);  // dPdT etc. might be zero for some analytic
+  ComputeResult compute(int eos_id, double rho, double T);
 
   void free_resources();  // Renamed from free() to avoid conflict if any
 

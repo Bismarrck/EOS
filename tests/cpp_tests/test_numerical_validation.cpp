@@ -8,19 +8,20 @@
 #include "../../third_party/doctest/doctest.h"
 #include "EquationOfStateV1.h"
 #include "eos_error_codes.h"
+#include "materials/MaterialEOS.h"
 #include "utils/string_utils.h"
 
 struct NumericalTestCase {
-  int eos_id;
-  double rho;
-  double T;
-  double ref_P;
-  double ref_E;
-  double ref_dPdT;
-  double ref_dEdT;
-  double ref_dPdrho;
+  int eos_id = -1;
+  double rho = 0.0;
+  double T = 0.0;
+  double ref_P = 0.0;
+  double ref_E = 0.0;
+  double ref_dPdT = 0.0;
+  double ref_dEdT = 0.0;
+  double ref_dPdrho = 0.0;
   std::string description;
-  int line_num;  // For error reporting
+  int line_num = -1;  // For error reporting
 
   // Configuration for this test
   bool use_tfd_v1_for_ref = true;
@@ -161,6 +162,7 @@ TEST_CASE("Numerical Validation from Reference Data") {
   for (const auto& tc : test_cases) {
     unique_ids[tc.eos_id] = true;
   }
+  all_eos_ids_to_init.reserve(unique_ids.size());
   for (const auto& pair : unique_ids) {
     all_eos_ids_to_init.push_back(pair.first);
   }
@@ -175,8 +177,9 @@ TEST_CASE("Numerical Validation from Reference Data") {
                   "EOS Manager initialization failed with code: " << init_stat);
 
   // Define a tolerance for floating point comparisons
-  const double rel_tolerance = 1e-7;  // Relative tolerance
-  const double abs_tolerance = 1e-9;  // Absolute tolerance for values near zero
+  constexpr double rel_tolerance = 1e-7;  // Relative tolerance
+  constexpr double abs_tolerance =
+      1e-9;  // Absolute tolerance for values near zero
 
   for (auto const& group : grouped_cases) {
     bool use_v1 = group.first;
@@ -186,14 +189,15 @@ TEST_CASE("Numerical Validation from Reference Data") {
             << (use_v1 ? "true" : "false"));
     if (case_group.empty()) continue;
 
-    EquationOfStateV1 eos_manager;
-    eos_manager.setUseTFDDataVer1(use_v1);  // Set TFD version for this group
+    EquationOfStateV1 eos_lib;
+    eos_lib.setUseTFDDataVer1(use_v1);  // Set TFD version for this group
 
     std::vector<int> ids_for_this_group;
     std::map<int, bool> unique_ids_in_group;
     for (const auto& tc : case_group) {
       unique_ids_in_group[tc.eos_id] = true;
     }
+    ids_for_this_group.reserve(unique_ids_in_group.size());
     for (const auto& pair : unique_ids_in_group) {
       ids_for_this_group.push_back(pair.first);
     }
@@ -202,7 +206,7 @@ TEST_CASE("Numerical Validation from Reference Data") {
          << use_v1 << " with EOS IDs (count: " << ids_for_this_group.size()
          << ")");
 
-    int init_stat = eos_manager.initialize(ids_for_this_group, eos_data_path);
+    init_stat = eos_lib.initialize(ids_for_this_group, eos_data_path);
     REQUIRE_MESSAGE(init_stat == EOS_SUCCESS,
                     "EOS Manager initialization failed for TFD config use_v1="
                         << use_v1 << " with code: " << init_stat);
@@ -226,11 +230,8 @@ TEST_CASE("Numerical Validation from Reference Data") {
         INFO("  Reference: P=" << tc.ref_P
                                << ", E=" << tc.ref_E /* << other refs */);
 
-        double P_calc, E_calc, dPdT_calc, dEdT_calc, dPdrho_calc;
-        int compute_stat =
-            eos_manager.compute(tc.eos_id, tc.rho, tc.T, P_calc, E_calc,
-                                dPdT_calc, dEdT_calc, dPdrho_calc);
-        REQUIRE(compute_stat == EOS_SUCCESS);
+        ComputeResult result = eos_lib.compute(tc.eos_id, tc.rho, tc.T);
+        REQUIRE(result.istat == EOS_SUCCESS);
 
         // Compare calculated values with reference values
         // Using doctest::Approx with relative and absolute epsilon might be
@@ -256,11 +257,11 @@ TEST_CASE("Numerical Validation from Reference Data") {
           }
         };
 
-        check_approx_equal(P_calc, tc.ref_P, "P");
-        check_approx_equal(E_calc, tc.ref_E, "E");
-        check_approx_equal(dPdT_calc, tc.ref_dPdT, "dPdT");
-        check_approx_equal(dEdT_calc, tc.ref_dEdT, "dEdT");
-        check_approx_equal(dPdrho_calc, tc.ref_dPdrho, "dPdrho");
+        check_approx_equal(result.P, tc.ref_P, "P");
+        check_approx_equal(result.E, tc.ref_E, "E");
+        check_approx_equal(result.dPdT, tc.ref_dPdT, "dPdT");
+        check_approx_equal(result.dEdT, tc.ref_dEdT, "dEdT");
+        check_approx_equal(result.dPdrho, tc.ref_dPdrho, "dPdrho");
       }
     }
   }

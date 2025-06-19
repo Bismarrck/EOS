@@ -116,24 +116,19 @@ int PolyEOS::initialize(
   return EOS_SUCCESS;
 }
 
-int PolyEOS::compute(double rho, double T, double& P_out, double& E_out,
-                     double& dPdT_out, double& dEdT_out,
-                     double& dPdrho_out) const {
+ComputeResult PolyEOS::compute(double rho, double T) const {
+  ComputeResult result;
   if (poly_coefficients_.empty()) {
     std::cerr << "Error (PolyEOS::compute): Polynomial coefficients not loaded "
                  "for EOS ID "
               << eos_id_ << std::endl;
-    return EOS_ERROR_POLY_EOS_EMPTY_PARAMS;
+    result.istat = EOS_ERROR_POLY_EOS_EMPTY_PARAMS;
+    return result;
   }
-
-  int istat_fortran;
-  dPdrho_out = 0.0;
-  dEdT_out = 0.0;
-  dPdrho_out = 0.0;
   c_poly_eos_compute(poly_coefficients_.data(),
                      static_cast<int>(poly_coefficients_.size()), rho, T,
-                     &P_out, &E_out, &istat_fortran);
-  return istat_fortran;
+                     &result.P, &result.E, &result.istat);
+  return result;
 }
 
 int PolyEOS::pack_parameters(std::ostream& os) const {

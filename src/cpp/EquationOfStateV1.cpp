@@ -149,18 +149,6 @@ int EquationOfStateV1::loadTFDDataInternal(const std::string& hdf5_filepath) {
   std::cout << "HDF5: Read TFD dimensions: " << tfd_data_->N1 << "x"
             << tfd_data_->N2 << std::endl;
 
-  // Determine which TFD version group to read from
-  // std::string tfd_version_group = (tfd_use_ver1_setting_ ? "/tfd_version_1" :
-  // "/tfd_version_2"); For simplicity, let's assume datasets are at root or a
-  // fixed path for now, and the file name itself (tfd_ver1.h5 vs tfd_ver2.h5)
-  // distinguishes versions. Or, if the file contains multiple versions: hid_t
-  // version_group_id = H5Gopen2(file_id, tfd_version_group.c_str(),
-  // H5P_DEFAULT); if (version_group_id < 0) { /* error */ } status =
-  // read_hdf5_dataset_double(version_group_id, "MatrixA", ...);
-  // H5Gclose(version_group_id);
-
-  // Assuming MatrixA and MatrixB are top-level datasets in the HDF5 file for
-  // now
   status = HDF5Utils::read_hdf5_dataset_double(
       file_id, "/matrix_A", tfd_data_->N1, tfd_data_->N2, tfd_data_->matrix_A);
   if (status < 0) {
@@ -427,20 +415,15 @@ int EquationOfStateV1::check_eos_data_dir(
 }
 
 // --- Computation ---
-int EquationOfStateV1::compute(int eos_id, double rho, double T, double& P,
-                               double& E, double& dPdT, double& dEdT,
-                               double& dPdrho) {
+ComputeResult EquationOfStateV1::compute(int eos_id, double rho, double T) {
+  ComputeResult result;
   auto it = loaded_materials_.find(eos_id);
   if (it == loaded_materials_.end()) {
     std::cerr << "Error: EOS ID " << eos_id << " not initialized." << std::endl;
-    return EOS_ERROR_UNKNOWN_EOS_ID;
+    result.istat = EOS_ERROR_UNKNOWN_EOS_ID;
+    return result;
   }
-  P = 0.0;
-  E = 0.0;
-  dPdT = 0.0;
-  dEdT = 0.0;
-  dPdrho = 0.0;  // Initialize outputs
-  return it->second->compute(rho, T, P, E, dPdT, dEdT, dPdrho);
+  return it->second->compute(rho, T);
 }
 
 void EquationOfStateV1::free_resources() {

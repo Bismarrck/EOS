@@ -17,9 +17,7 @@ public:
                    const std::string& eos_data_dir_root,
                    const EOS_Internal::TFDMatrices* tfd_data) override; // tfd_data will be nullptr
 
-    int compute(double rho, double T,
-                double& P_out, double& E_out,
-                double& dPdT_out, double& dEdT_out, double& dPdrho_out) const override;
+    ComputeResult compute(double rho, double T) const override;
 
     int pack_parameters(std::ostream& os) const override;
     int unpack_parameters(std::istream& is) override;

@@ -35,7 +35,8 @@ namespace EOSUtils { /* Assume parse_complicated_eos_params is available from
                         string_utils.h/cpp */
 }
 
-ComplicatedLegacyEOS::ComplicatedLegacyEOS(const int eos_id, const std::string& name)
+ComplicatedLegacyEOS::ComplicatedLegacyEOS(const int eos_id,
+                                           const std::string& name)
     : MaterialEOS(eos_id, ModelCategory::COMPLICATED_TABLE_TFD, name),
       tfd_data_ptr_(nullptr) {}
 
@@ -108,14 +109,14 @@ int ComplicatedLegacyEOS::initialize(
   return EOS_SUCCESS;
 }
 
-int ComplicatedLegacyEOS::compute(double rho, double T, double& P_out,
-                                  double& E_out, double& dPdT_out,
-                                  double& dEdT_out, double& dPdrho_out) const {
+ComputeResult ComplicatedLegacyEOS::compute(double rho, double T) const {
+  ComputeResult result;
   if (params_.empty()) {
     std::cerr << "Error (ComplicatedLegacyEOS::compute): Parameters not loaded "
                  "for EOS ID "
               << eos_id_ << std::endl;
-    return EOS_ERROR_COMPLICATED_EOS_EMPTY_PARAMS;
+    result.istat = EOS_ERROR_COMPLICATED_EOS_EMPTY_PARAMS;
+    return result;
   }
   // if (!tfd_data_ptr_ || !tfd_data_ptr_->initialized) {
   //     std::cerr << "Error (ComplicatedLegacyEOS::compute): TFD data not
@@ -123,15 +124,15 @@ int ComplicatedLegacyEOS::compute(double rho, double T, double& P_out,
   //     MAT_EOS_COMPUTE_FAILED;
   // }
 
-  int istat_fortran;
-  c_complicated_eos(
-      params_.data(), static_cast<int>(params_.size()), rho, T,
-      tfd_data_ptr_->matrix_A.data(), tfd_data_ptr_->N1, tfd_data_ptr_->N2,
-      tfd_data_ptr_->matrix_B.data(), tfd_data_ptr_->N1,
-      tfd_data_ptr_->N2,  // Assuming N1/N2 same for A & B
-      &P_out, &E_out, &dPdT_out, &dEdT_out, &dPdrho_out, &istat_fortran);
+  c_complicated_eos(params_.data(), static_cast<int>(params_.size()), rho, T,
+                    tfd_data_ptr_->matrix_A.data(), tfd_data_ptr_->N1,
+                    tfd_data_ptr_->N2, tfd_data_ptr_->matrix_B.data(),
+                    tfd_data_ptr_->N1,
+                    tfd_data_ptr_->N2,  // Assuming N1/N2 same for A & B
+                    &result.P, &result.E, &result.dPdT, &result.dEdT,
+                    &result.dPdrho, &result.istat);
 
-  return istat_fortran;  // Propagate Fortran status
+  return result;
 }
 
 int ComplicatedLegacyEOS::pack_parameters(std::ostream& os) const {

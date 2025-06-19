@@ -1,9 +1,10 @@
-#include "../../third_party/doctest/doctest.h"
+#include <string>
+#include <vector>
+
 #include "../../src/cpp/EquationOfStateV1.h"
 #include "../../src/cpp/eos_error_codes.h"
-#include <vector>
-#include <string>
-
+#include "../../third_party/doctest/doctest.h"
+#include "materials/MaterialEOS.h"
 
 TEST_CASE("EquationOfStateV1 Pack/Unpack Tests") {
     EquationOfStateV1 eos_manager_rank0;
@@ -42,31 +43,29 @@ TEST_CASE("EquationOfStateV1 Pack/Unpack Tests") {
     // --- Verification ---
     SUBCASE("Verify by computing after unpack") {
         double rho = 1.8, T = 1200.0;
-        double P_r0, E_r0, dPdT_r0, dEdT_r0, dPdrho_r0;
-        double P_rN, E_rN, dPdT_rN, dEdT_rN, dPdrho_rN;
-        int comp_stat_r0, comp_stat_rN;
+        ComputeResult result_r0, result_rN;
 
         // Complicated EOS
         INFO("Comparing Complicated EOS (ID 10000) results");
-        comp_stat_r0 = eos_manager_rank0.compute(10000, rho, T, P_r0, E_r0, dPdT_r0, dEdT_r0, dPdrho_r0);
-        comp_stat_rN = eos_manager_rankN.compute(10000, rho, T, P_rN, E_rN, dPdT_rN, dEdT_rN, dPdrho_rN);
-        REQUIRE(comp_stat_r0 == EOS_SUCCESS);
-        REQUIRE(comp_stat_rN == EOS_SUCCESS);
-        CHECK(P_r0 == doctest::Approx(P_rN));
-        CHECK(E_r0 == doctest::Approx(E_rN));
-        CHECK(dPdT_r0 == doctest::Approx(dPdT_rN));
-        CHECK(dEdT_r0 == doctest::Approx(dEdT_rN));
-        CHECK(dPdrho_r0 == doctest::Approx(dPdrho_rN));
+        result_r0 = eos_manager_rank0.compute(10000, rho, T);
+        result_rN = eos_manager_rankN.compute(10000, rho, T);
+        REQUIRE(result_r0.istat == EOS_SUCCESS);
+        REQUIRE(result_rN.istat == EOS_SUCCESS);
+        CHECK(result_r0.P == doctest::Approx(result_rN.P));
+        CHECK(result_r0.E == doctest::Approx(result_rN.E));
+        CHECK(result_r0.dPdT == doctest::Approx(result_rN.dPdT));
+        CHECK(result_r0.dEdT == doctest::Approx(result_rN.dEdT));
+        CHECK(result_r0.dPdrho == doctest::Approx(result_rN.dPdrho));
 
         // Analytic EOS
         rho = 1.2; T = 300.0;
         INFO("Comparing Analytic EOS (ID 1) results");
-        comp_stat_r0 = eos_manager_rank0.compute(1, rho, T, P_r0, E_r0, dPdT_r0, dEdT_r0, dPdrho_r0);
-        comp_stat_rN = eos_manager_rankN.compute(1, rho, T, P_rN, E_rN, dPdT_rN, dEdT_rN, dPdrho_rN);
-        REQUIRE(comp_stat_r0 == EOS_SUCCESS);
-        REQUIRE(comp_stat_rN == EOS_SUCCESS);
-        CHECK(P_r0 == doctest::Approx(P_rN));
-        CHECK(E_r0 == doctest::Approx(E_rN));
+        result_r0 = eos_manager_rank0.compute(1, rho, T);
+        result_rN = eos_manager_rankN.compute(1, rho, T);
+        REQUIRE(result_r0.istat == EOS_SUCCESS);
+        REQUIRE(result_rN.istat == EOS_SUCCESS);
+        CHECK(result_r0.P == doctest::Approx(result_rN.P));
+        CHECK(result_r0.E == doctest::Approx(result_rN.E));
     }
     delete[] packed_buffer;
 }
