@@ -1,7 +1,8 @@
 #include "AnalyticEOS.h"
 
 #include <iostream>
-#include <sstream>  // For pack/unpack
+#include <sstream>
+#include "eos_error_codes.h"
 
 // Declare C-wrappers for analytic Fortran routines
 extern "C" {
@@ -35,7 +36,7 @@ int AnalyticEOS::initialize(const std::string& material_param_filepath,
   // Optionally, open material_param_filepath to read descriptive metadata if
   // present, beyond just the #MODEL_TYPE line (which EquationOfStateV1 already
   // processed).
-  return MAT_EOS_SUCCESS;
+  return EOS_SUCCESS;
 }
 
 int AnalyticEOS::compute(double rho, double T, double& P_out, double& E_out,
@@ -64,7 +65,7 @@ int AnalyticEOS::compute(double rho, double T, double& P_out, double& E_out,
                 << eos_id_ << std::endl;
       P_out = 0.0;
       E_out = 0.0;
-      return MAT_EOS_COMPUTE_FAILED;  // Or specific error
+      return EOS_ERROR_INVALID_EOS_TYPE;
   }
   return istat_fortran;
 }
@@ -77,9 +78,9 @@ int AnalyticEOS::pack_parameters(std::ostream& os) const {
     std::cerr << "Error (AnalyticEOS::pack_parameters): Failed to write form "
                  "for EOS ID "
               << eos_id_ << std::endl;
-    return MAT_EOS_PACK_FAILED;
+    return EOS_ERROR_UNPACK_FAILED;
   }
-  return MAT_EOS_SUCCESS;
+  return EOS_SUCCESS;
 }
 
 int AnalyticEOS::unpack_parameters(std::istream& is) {
@@ -90,7 +91,7 @@ int AnalyticEOS::unpack_parameters(std::istream& is) {
                  "for EOS ID "
               << eos_id_ << std::endl;
     form_ = AnalyticForm::UNDEFINED;  // Reset to a safe default
-    return MAT_EOS_UNPACK_FAILED;
+    return EOS_ERROR_UNPACK_FAILED;
   }
 
   // Validate the unpacked enum value
@@ -104,7 +105,7 @@ int AnalyticEOS::unpack_parameters(std::istream& is) {
         << "Error (AnalyticEOS::unpack_parameters): Invalid AnalyticForm value "
         << form_val << " unpacked for EOS ID " << eos_id_ << std::endl;
     form_ = AnalyticForm::UNDEFINED;
-    return MAT_EOS_UNPACK_FAILED;  // Or a specific error for invalid enum
+    return EOS_ERROR_UNPACK_FAILED;  // Or a specific error for invalid enum
   }
-  return MAT_EOS_SUCCESS;
+  return EOS_SUCCESS;
 }

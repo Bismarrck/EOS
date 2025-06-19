@@ -1,11 +1,9 @@
 #include "PolyEOS.h"
-
 #include <hdf5.h>
-
 #include <iostream>
 #include <sstream>  // For pack/unpack
-
 #include "utils/hdf5_utils.h"
+#include "eos_error_codes.h"
 
 // Declare the C-wrapper for the Fortran poly_eos_compute routine
 extern "C" {
@@ -48,7 +46,7 @@ int PolyEOS::initialize(
         << "Error (PolyEOS::initialize): Could not open HDF5 parameter file: "
         << material_param_filepath_h5 << std::endl;
     H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data);
-    return MAT_EOS_INIT_FAILED;
+    return EOS_ERROR_POLY_EOS_INIT_FAILED;
   }
 
   // Read parameters specific to PolyEOS from the HDF5 file
@@ -60,7 +58,7 @@ int PolyEOS::initialize(
               << std::endl;
     H5Fclose(file_id);
     H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data);
-    return MAT_EOS_INIT_FAILED;
+    return EOS_ERROR_POLY_EOS_INIT_FAILED;
   }
   hid_t dspace_id = H5Dget_space(dset_id);
   int rank = H5Sget_simple_extent_ndims(dspace_id);
@@ -69,7 +67,7 @@ int PolyEOS::initialize(
     H5Dclose(dset_id);
     H5Fclose(file_id);
     H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data);
-    return MAT_EOS_INIT_FAILED;
+    return EOS_ERROR_POLY_EOS_INIT_FAILED;
   }
 
   hsize_t dims[1];
@@ -87,7 +85,7 @@ int PolyEOS::initialize(
         << std::endl;
     H5Fclose(file_id);
     H5Eset_auto2(H5E_DEFAULT, old_func, old_client_data);
-    return MAT_EOS_INIT_FAILED;
+    return EOS_ERROR_POLY_EOS_INIT_FAILED;
   }
   std::cout << "PolyEOS: Loaded " << poly_coefficients_.size()
             << " polynomial coefficients." << std::endl;
@@ -115,7 +113,7 @@ int PolyEOS::initialize(
                old_client_data);  // Restore error printing
 
   std::cout << "PolyEOS ID " << eos_id_ << " initialized." << std::endl;
-  return MAT_EOS_SUCCESS;
+  return EOS_SUCCESS;
 }
 
 int PolyEOS::compute(double rho, double T, double& P_out, double& E_out,
@@ -125,7 +123,7 @@ int PolyEOS::compute(double rho, double T, double& P_out, double& E_out,
     std::cerr << "Error (PolyEOS::compute): Polynomial coefficients not loaded "
                  "for EOS ID "
               << eos_id_ << std::endl;
-    return MAT_EOS_COMPUTE_FAILED;
+    return EOS_ERROR_POLY_EOS_EMPTY_PARAMS;
   }
 
   int istat_fortran;
@@ -142,23 +140,23 @@ int PolyEOS::pack_parameters(std::ostream& os) const {
   // 1. Pack poly_coefficients_
   size_t num_coeffs = poly_coefficients_.size();
   os.write(reinterpret_cast<const char*>(&num_coeffs), sizeof(num_coeffs));
-  if (!os.good()) return MAT_EOS_PACK_FAILED;
+  if (!os.good()) return EOS_ERROR_PACK_FAILED;
   if (num_coeffs > 0) {
     os.write(reinterpret_cast<const char*>(poly_coefficients_.data()),
              num_coeffs * sizeof(double));
-    if (!os.good()) return MAT_EOS_PACK_FAILED;
+    if (!os.good()) return EOS_ERROR_PACK_FAILED;
   }
 
   // 2. Pack validity range (example members)
   os.write(reinterpret_cast<const char*>(&rho_min_validity_),
            sizeof(rho_min_validity_));
-  if (!os.good()) return MAT_EOS_PACK_FAILED;
+  if (!os.good()) return EOS_ERROR_PACK_FAILED;
   os.write(reinterpret_cast<const char*>(&rho_max_validity_),
            sizeof(rho_max_validity_));
-  if (!os.good()) return MAT_EOS_PACK_FAILED;
+  if (!os.good()) return EOS_ERROR_PACK_FAILED;
   // Pack any other PolyEOS specific parameters here...
 
-  return MAT_EOS_SUCCESS;
+  return EOS_SUCCESS;
 }
 
 int PolyEOS::unpack_parameters(std::istream& is) {
@@ -166,8 +164,8 @@ int PolyEOS::unpack_parameters(std::istream& is) {
   // 1. Unpack poly_coefficients_
   size_t num_coeffs = 0;
   is.read(reinterpret_cast<char*>(&num_coeffs), sizeof(num_coeffs));
-  if (!is.good() && num_coeffs > 0) return MAT_EOS_UNPACK_FAILED;
-  if (num_coeffs == 0 && !is.good() && !is.eof()) return MAT_EOS_UNPACK_FAILED;
+  if (!is.good() && num_coeffs > 0) return EOS_ERROR_UNPACK_FAILED;
+  if (num_coeffs == 0 && !is.good() && !is.eof()) return EOS_ERROR_UNPACK_FAILED;
 
   if (num_coeffs > 0) {
     try {
@@ -176,25 +174,25 @@ int PolyEOS::unpack_parameters(std::istream& is) {
       std::cerr
           << "Error (PolyEOS::unpack): Failed to resize poly_coefficients_: "
           << e.what() << std::endl;
-      return MAT_EOS_UNPACK_FAILED;
+      return EOS_ERROR_UNPACK_FAILED;
     }
     is.read(reinterpret_cast<char*>(poly_coefficients_.data()),
             num_coeffs * sizeof(double));
     if (!is.good()) {
       poly_coefficients_.clear();
-      return MAT_EOS_UNPACK_FAILED;
+      return EOS_ERROR_UNPACK_FAILED;
     }
   }
 
   // 2. Unpack validity range
   is.read(reinterpret_cast<char*>(&rho_min_validity_),
           sizeof(rho_min_validity_));
-  if (!is.good()) return MAT_EOS_UNPACK_FAILED;
+  if (!is.good()) return EOS_ERROR_UNPACK_FAILED;
   is.read(reinterpret_cast<char*>(&rho_max_validity_),
           sizeof(rho_max_validity_));
-  if (!is.good()) return MAT_EOS_UNPACK_FAILED;
+  if (!is.good()) return EOS_ERROR_UNPACK_FAILED;
 
   // Unpack any other PolyEOS specific parameters here...
 
-  return MAT_EOS_SUCCESS;
+  return EOS_SUCCESS;
 }

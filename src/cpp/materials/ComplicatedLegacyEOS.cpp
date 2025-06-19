@@ -35,7 +35,7 @@ namespace EOSUtils { /* Assume parse_complicated_eos_params is available from
                         string_utils.h/cpp */
 }
 
-ComplicatedLegacyEOS::ComplicatedLegacyEOS(int eos_id, const std::string& name)
+ComplicatedLegacyEOS::ComplicatedLegacyEOS(const int eos_id, const std::string& name)
     : MaterialEOS(eos_id, ModelCategory::COMPLICATED_TABLE_TFD, name),
       tfd_data_ptr_(nullptr) {}
 
@@ -50,7 +50,7 @@ int ComplicatedLegacyEOS::initialize(
     std::cerr << "Error (ComplicatedLegacyEOS::initialize): TFD data is "
                  "required but not provided or not initialized."
               << std::endl;
-    return MAT_EOS_INIT_FAILED;  // Or a more specific error
+    return EOS_ERROR_COMPLICATED_EOS_INIT_FAILED;  // Or a more specific error
   }
   tfd_data_ptr_ = tfd_data;
 
@@ -59,7 +59,7 @@ int ComplicatedLegacyEOS::initialize(
     std::cerr << "Error (ComplicatedLegacyEOS::initialize): Could not open "
                  "parameter file: "
               << material_param_filepath << std::endl;
-    return MAT_EOS_INIT_FAILED;
+    return EOS_ERROR_COMPLICATED_EOS_INIT_FAILED;
   }
 
   // Skip #MODEL_TYPE line, as it was already read by EquationOfStateV1
@@ -100,12 +100,12 @@ int ComplicatedLegacyEOS::initialize(
               << material_param_filepath << ". Status: " << parse_stat
               << std::endl;
     params_.clear();  // Ensure params are empty on failure
-    return MAT_EOS_INIT_FAILED;
+    return EOS_ERROR_COMPLICATED_EOS_INIT_FAILED;
   }
 
   std::cout << "ComplicatedLegacyEOS ID " << eos_id_ << " initialized with "
             << params_.size() << " parameters." << std::endl;
-  return MAT_EOS_SUCCESS;  // Use MAT_EOS_SUCCESS or a common EOS_SUCCESS
+  return EOS_SUCCESS;
 }
 
 int ComplicatedLegacyEOS::compute(double rho, double T, double& P_out,
@@ -115,7 +115,7 @@ int ComplicatedLegacyEOS::compute(double rho, double T, double& P_out,
     std::cerr << "Error (ComplicatedLegacyEOS::compute): Parameters not loaded "
                  "for EOS ID "
               << eos_id_ << std::endl;
-    return MAT_EOS_COMPUTE_FAILED;  // Or other error
+    return EOS_ERROR_COMPLICATED_EOS_EMPTY_PARAMS;
   }
   // if (!tfd_data_ptr_ || !tfd_data_ptr_->initialized) {
   //     std::cerr << "Error (ComplicatedLegacyEOS::compute): TFD data not
@@ -137,14 +137,14 @@ int ComplicatedLegacyEOS::compute(double rho, double T, double& P_out,
 int ComplicatedLegacyEOS::pack_parameters(std::ostream& os) const {
   size_t num_params = params_.size();
   os.write(reinterpret_cast<const char*>(&num_params), sizeof(num_params));
-  if (!os.good()) return MAT_EOS_PACK_FAILED;
+  if (!os.good()) return EOS_ERROR_PACK_FAILED;
 
   if (num_params > 0) {
     os.write(reinterpret_cast<const char*>(params_.data()),
              num_params * sizeof(double));
-    if (!os.good()) return MAT_EOS_PACK_FAILED;
+    if (!os.good()) return EOS_ERROR_PACK_FAILED;
   }
-  return MAT_EOS_SUCCESS;
+  return EOS_SUCCESS;
 }
 
 int ComplicatedLegacyEOS::unpack_parameters(std::istream& is) {
@@ -155,14 +155,14 @@ int ComplicatedLegacyEOS::unpack_parameters(std::istream& is) {
     std::cerr
         << "Error (ComplicatedLegacyEOS::unpack): Failed to read num_params."
         << std::endl;
-    return MAT_EOS_UNPACK_FAILED;
+    return EOS_ERROR_UNPACK_FAILED;
   }
   if (num_params == 0 && !is.good() &&
       !is.eof()) {  // Read error but num_params could be 0
     std::cerr << "Error (ComplicatedLegacyEOS::unpack): Stream error after "
                  "reading num_params=0."
               << std::endl;
-    return MAT_EOS_UNPACK_FAILED;
+    return EOS_ERROR_UNPACK_FAILED;
   }
 
   if (num_params > 0) {
@@ -172,7 +172,7 @@ int ComplicatedLegacyEOS::unpack_parameters(std::istream& is) {
       std::cerr << "Error (ComplicatedLegacyEOS::unpack): Failed to resize "
                    "params vector: "
                 << e.what() << std::endl;
-      return MAT_EOS_UNPACK_FAILED;  // Or specific memory error
+      return EOS_ERROR_UNPACK_FAILED;  // Or specific memory error
     }
     is.read(reinterpret_cast<char*>(params_.data()),
             num_params * sizeof(double));
@@ -180,9 +180,9 @@ int ComplicatedLegacyEOS::unpack_parameters(std::istream& is) {
       std::cerr << "Error (ComplicatedLegacyEOS::unpack): Failed to read "
                 << num_params << " parameters." << std::endl;
       params_.clear();  // Clear partially read data
-      return MAT_EOS_UNPACK_FAILED;
+      return EOS_ERROR_UNPACK_FAILED;
     }
   }
   // tfd_data_ptr_ will be set by EquationOfStateV1 after this call if needed
-  return MAT_EOS_SUCCESS;
+  return EOS_SUCCESS;
 }

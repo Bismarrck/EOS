@@ -514,7 +514,7 @@ int EquationOfStateV1::pack_data(char*& buffer, int& buffer_size) const {
 
     // Use a temporary stringstream to get size of material-specific parameters
     std::ostringstream temp_param_stream(std::ios::binary);
-    if (mat_ptr->pack_parameters(temp_param_stream) != MAT_EOS_SUCCESS) {
+    if (mat_ptr->pack_parameters(temp_param_stream) != EOS_SUCCESS) {
       std::cerr << "Pack Error: Failed to pre-calculate size for material ID "
                 << mat_ptr->get_eos_id() << std::endl;
       return -3;  // Error during size calculation
@@ -571,7 +571,7 @@ int EquationOfStateV1::pack_data(char*& buffer, int& buffer_size) const {
     pack_item(current_char_ptr, category_to_pack);
 
     std::ostringstream param_stream(std::ios::binary);
-    if (mat_ptr->pack_parameters(param_stream) != MAT_EOS_SUCCESS) {
+    if (mat_ptr->pack_parameters(param_stream) != EOS_SUCCESS) {
       std::cerr << "Pack Error: Failed to pack parameters for material ID "
                 << eos_id_to_pack << std::endl;
       // This is tricky, buffer might be partially written.
@@ -742,7 +742,7 @@ int EquationOfStateV1::unpack_data(const char* buffer, int buffer_size) {
     }
 
     // Unpack the material's specific parameters
-    if (material_ptr->unpack_parameters(param_stream) != MAT_EOS_SUCCESS) {
+    if (material_ptr->unpack_parameters(param_stream) != EOS_SUCCESS) {
       std::cerr << "Unpack Error: Failed to unpack parameters for material ID "
                 << eos_id_unpacked << std::endl;
       return EOS_ERROR_UNPACK_FAILED;
@@ -754,7 +754,7 @@ int EquationOfStateV1::unpack_data(const char* buffer, int buffer_size) {
     // unpacked object type requires it.
     if (category_unpacked ==
         MaterialEOS::ModelCategory::COMPLICATED_TABLE_TFD) {
-      ComplicatedLegacyEOS* complicated_ptr =
+      auto* complicated_ptr =
           dynamic_cast<ComplicatedLegacyEOS*>(material_ptr.get());
       if (complicated_ptr) {
         if (!tfd_data_ || !tfd_data_->initialized) {
