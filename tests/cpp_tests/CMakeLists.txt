@@ -14,6 +14,10 @@ target_link_libraries(eos_cpp_tests PRIVATE
         eos_fortran_core_obj   # The Fortran object library (defined in src/fortran/CMakeLists.txt)
 )
 
+target_include_directories(eos_cpp_tests PRIVATE
+        ${HDF5_INCLUDE_DIRS}
+)
+
 # Ensure tests can find EquationOfStateV1.h (via EquationOfStateV1_lib's PUBLIC include)
 # and doctest.h (via root CMakeLists.txt's include_directories)
 

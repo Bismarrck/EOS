@@ -24,6 +24,7 @@ target_include_directories(EquationOfStateV1_lib
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+        PRIVATE
         ${HDF5_INCLUDE_DIRS}
 )
 

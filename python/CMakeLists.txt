@@ -28,6 +28,8 @@ else()
     )
 endif()
 
+target_include_directories(PyEOS PRIVATE ${HDF5_INCLUDE_DIRS})
+
 # Optional: Install the Python module
 # This destination should allow Python to find it, e.g. site-packages or a path added to PYTHONPATH
 # pybind11_install_module(PyEOS DESTINATION ${CMAKE_INSTALL_PREFIX}/python/PyEOS COMPONENT python)

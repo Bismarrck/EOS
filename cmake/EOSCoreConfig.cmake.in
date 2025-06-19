@@ -1,7 +1,10 @@
 @PACKAGE_INIT@
 
+find_dependency(HDF5 REQUIRED COMPONENTS C HL)
+
 # Define a variable pointing to the installed Fortran interface module source(s) directory
 set(EOSCore_FORTRAN_MODULE_SOURCES_DIR "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/EOSCore/fortran_src")
+
 # Define a variable for the specific interface file if commonly needed
 set(EOSCore_FORTRAN_INTERFACE_MODULE_FILE "${EOSCore_FORTRAN_MODULE_SOURCES_DIR}/module_eos_fortran_interface.F90")
 
