@@ -88,6 +88,17 @@ class EquationOfStateV1 {
   // --- Computation ---
   ComputeResult compute(int eos_id, double rho, double T);
 
+  // Solves for Temperature given Density and Internal Energy.
+  // T_min and T_max provide the initial bracket for the root-finder.
+  // T_guess is not directly used by Brent's method but could be used to inform the bracket.
+  ComputeResult compute_T_at_RhoE(
+      int eos_id,
+      double rho,
+      double E_target,
+      double T_min = 1.0,     // Default lower bracket for temperature
+      double T_max = 1.0e8    // Default upper bracket for temperature
+  );
+
   void free_resources();  // Renamed from free() to avoid conflict if any
 
   // --- MPI Data Packing/Unpacking ---

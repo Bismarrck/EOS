@@ -4,6 +4,8 @@
 #include <iosfwd>  // For std::ostream&, std::istream& forward declarations
 #include <string>
 
+#include "eos_error_codes.h"
+
 // Forward declaration for TFDMatrices to avoid circular include if MaterialEOS
 // methods took it by value/ref However, since initialize takes it by pointer, a
 // forward declaration is fine.
@@ -54,6 +56,17 @@ class MaterialEOS {
 
   // Core computation method.
   virtual ComputeResult compute(double rho, double T) const = 0;
+
+  // NEW: Optional virtual method to get just the energy.
+  // A default implementation is provided that calls the main compute method.
+  // Derived classes can override this if a more direct E(rho,T) calculation is available.
+  virtual int get_E(double rho, double T, double& E_out) const {
+    ComputeResult res = this->compute(rho, T);
+    if (res.istat == EOS_SUCCESS) {
+      E_out = res.E;
+    }
+    return res.istat;
+  }
 
   // Methods for MPI packing/unpacking of *this material's specific parameters*.
   // TFD data is handled by EquationOfStateV1.

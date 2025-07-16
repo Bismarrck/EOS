@@ -22,6 +22,7 @@
 #include "utils/checksum_utils.h"
 #include "utils/hdf5_utils.h"
 #include "utils/string_utils.h"
+#include "math/NumericalSolvers.h"
 
 EquationOfStateV1::EquationOfStateV1()
     : tfd_data_(std::make_unique<EOS_Internal::TFDMatrices>()) {  // Default TFD
@@ -424,6 +425,61 @@ ComputeResult EquationOfStateV1::compute(int eos_id, double rho, double T) {
     return result;
   }
   return it->second->compute(rho, T);
+}
+
+ComputeResult EquationOfStateV1::compute_T_at_RhoE(
+    int eos_id, double rho, double E_target, double T_min, double T_max) {
+
+    // 1. Find the material
+    auto it = loaded_materials_.find(eos_id);
+    if (it == loaded_materials_.end()) {
+        std::cerr << "Error (compute_T_at_RhoE): EOS ID " << eos_id << " not initialized." << std::endl;
+        return ComputeResult(EOS_ERROR_UNKNOWN_EOS_ID);
+    }
+    const auto& material_ptr = it->second;
+
+    // 2. Define the function for the root-finder: f(T) = E(rho, T) - E_target
+    auto func_E_minus_E_target = [&](double T_trial) -> double {
+        if (T_trial <= 0) return std::numeric_limits<double>::max(); // T must be positive
+
+        double E_trial = 0.0;
+        int stat = material_ptr->get_E(rho, T_trial, E_trial); // Use the get_E helper
+        if (stat != EOS_SUCCESS) {
+            // If compute fails at this T, it's not a valid point for the solver.
+            // Return a large value to push the solver away.
+            return std::numeric_limits<double>::max();
+        }
+        return E_trial - E_target;
+    };
+
+    // 3. Verify the initial bracket [T_min, T_max]
+    double f_min = func_E_minus_E_target(T_min);
+    double f_max = func_E_minus_E_target(T_max);
+
+    if (f_min * f_max > 0) {
+        std::cerr << "Error (compute_T_at_RhoE): Root not bracketed for EOS ID " << eos_id << "." << std::endl;
+        std::cerr << "  f(T_min=" << T_min << ") = " << f_min << std::endl;
+        std::cerr << "  f(T_max=" << T_max << ") = " << f_max << std::endl;
+        std::cerr << "  Target E was " << E_target << ". The energy at the boundaries may be both above or both below the target." << std::endl;
+        return ComputeResult(-1); // Or a specific "bracketing failed" error
+    }
+
+    // 4. Call Brent's method
+    EOS_Toolkit::NumericalSolvers::RootResult solver_result =
+        EOS_Toolkit::NumericalSolvers::brents_method(func_E_minus_E_target, T_min, T_max);
+
+    if (!solver_result.converged) {
+        std::cerr << "Error (compute_T_at_RhoE): Root-finder failed to converge for EOS ID " << eos_id << "." << std::endl;
+        return ComputeResult(-2); // Or specific "convergence failed" error
+    }
+
+    double T_final = solver_result.root;
+
+    // 5. Call compute one last time with the found T to get the full thermodynamic state
+    std::cout << "Info (compute_T_at_RhoE): Found T=" << T_final << " for rho=" << rho
+              << ", E=" << E_target << " in " << solver_result.iterations << " iterations." << std::endl;
+
+    return this->compute(eos_id, rho, T_final);
 }
 
 void EquationOfStateV1::free_resources() {
