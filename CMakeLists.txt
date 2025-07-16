@@ -17,6 +17,8 @@ if(WIN32)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 set(THIRDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+include_directories(SYSTEM ${THIRDPARTY_DIR}/boost)
+include_directories(SYSTEM ${THIRDPARTY_DIR}/CLI11)
 include_directories(SYSTEM ${THIRDPARTY_DIR})
 
 # --- Include Package Helpers ---
@@ -76,6 +78,12 @@ list(PREPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
 
 # --- BUILD Options (Python, Examples, Tests) ---
+
+option(EOS_BUILD_TOOLS "Build command-line tools" ON) # Add option for tools
+if(EOS_BUILD_TOOLS)
+    add_subdirectory(tools)
+endif()
+
 # These will be processed *after* CMAKE_PREFIX_PATH is updated.
 option(EOS_BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 if(EOS_BUILD_PYTHON_BINDINGS)

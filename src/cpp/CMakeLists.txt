@@ -1,5 +1,7 @@
 # src/cpp/CMakeLists.txt
 
+add_subdirectory(math)
+
 # Create a static library from EquationOfStateV1.cpp/.h
 add_library(EquationOfStateV1_lib STATIC
         EquationOfStateV1.cpp
@@ -37,6 +39,8 @@ elseif(TARGET HDF5::HDF5) # Older imported target name
 else() # Fallback to variables
     target_link_libraries(EquationOfStateV1_lib PRIVATE ${HDF5_C_LIBRARIES} ${HDF5_HL_LIBRARIES})
 endif()
+
+target_link_libraries(EquationOfStateV1_lib PRIVATE EOSMath_lib)
 
 # Install EquationOfStateV1_lib and add it to the EOSCoreTargets export set
 # This assumes CMAKE_INSTALL_LIBDIR is defined (e.g., by include(GNUInstallDirs) in root)
