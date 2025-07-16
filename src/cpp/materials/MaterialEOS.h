@@ -68,6 +68,14 @@ class MaterialEOS {
     return res.istat;
   }
 
+  virtual int get_P(double rho, double T, double& P_out) const {
+    ComputeResult res = this->compute(rho, T);
+    if (res.istat == EOS_SUCCESS) {
+      P_out = res.P;
+    }
+    return res.istat;
+  }
+
   // Methods for MPI packing/unpacking of *this material's specific parameters*.
   // TFD data is handled by EquationOfStateV1.
   // The stream can be a custom buffer wrapper or directly std::ostream/istream

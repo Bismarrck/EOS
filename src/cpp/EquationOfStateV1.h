@@ -99,6 +99,14 @@ class EquationOfStateV1 {
       double T_max = 1.0e8    // Default upper bracket for temperature
   );
 
+  ComputeResult compute_rho_at_PT(
+        int eos_id,
+        double P_target,
+        double T,
+        double rho_min,
+        double rho_max
+    );
+
   void free_resources();  // Renamed from free() to avoid conflict if any
 
   // --- MPI Data Packing/Unpacking ---

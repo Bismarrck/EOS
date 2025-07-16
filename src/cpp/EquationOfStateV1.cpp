@@ -482,6 +482,69 @@ ComputeResult EquationOfStateV1::compute_T_at_RhoE(
     return this->compute(eos_id, rho, T_final);
 }
 
+ComputeResult EquationOfStateV1::compute_rho_at_PT(
+    int eos_id, double P_target, double T, double rho_min, double rho_max) {
+
+    // 1. Find the material
+    auto it = loaded_materials_.find(eos_id);
+    if (it == loaded_materials_.end()) {
+        std::cerr << "Error (compute_rho_at_PT): EOS ID " << eos_id << " not initialized." << std::endl;
+        return ComputeResult(EOS_ERROR_UNKNOWN_EOS_ID);
+    }
+    const auto& material_ptr = it->second;
+
+    // 2. Define the function for the root-finder: f(rho) = P(rho, T) - P_target
+    auto func_P_minus_P_target = [&](double rho_trial) -> double {
+        if (rho_trial <= 0) return std::numeric_limits<double>::lowest(); // Return large negative to push solver away
+
+        double P_trial = 0.0;
+        int stat = material_ptr->get_P(rho_trial, T, P_trial);
+        if (stat != EOS_SUCCESS) {
+            // Signal an error to the solver. Returning a value that won't help bracket
+            // is one way, but ideally the solver would handle function evaluation failure.
+            // For Brent's method, this could break the bracketing assumption.
+            // We should ensure the initial bracket is valid.
+            return std::numeric_limits<double>::quiet_NaN(); // NaN is a good way to signal failure
+        }
+        return P_trial - P_target;
+    };
+
+    // 3. Verify the initial bracket [rho_min, rho_max]
+    double f_min = func_P_minus_P_target(rho_min);
+    double f_max = func_P_minus_P_target(rho_max);
+
+    // Check for NaN, which indicates a computation failure inside the bracket function
+    if (std::isnan(f_min) || std::isnan(f_max)) {
+        std::cerr << "Error (compute_rho_at_PT): EOS computation failed at bracket boundaries for EOS ID " << eos_id << "." << std::endl;
+        return ComputeResult(-4);
+    }
+
+    if (f_min * f_max > 0) {
+        std::cerr << "Error (compute_rho_at_PT): Root not bracketed for EOS ID " << eos_id << "." << std::endl;
+        std::cerr << "  f(rho_min=" << rho_min << ") = " << f_min << std::endl;
+        std::cerr << "  f(rho_max=" << rho_max << ") = " << f_max << std::endl;
+        std::cerr << "  Target P was " << P_target << ". The pressure at the boundaries may be both above or both below the target." << std::endl;
+        return ComputeResult(-6); // Or a specific "bracketing failed" error
+    }
+
+    // 4. Call Brent's method
+    EOS_Toolkit::NumericalSolvers::RootResult solver_result =
+        EOS_Toolkit::NumericalSolvers::brents_method(func_P_minus_P_target, rho_min, rho_max);
+
+    if (!solver_result.converged) {
+        std::cerr << "Error (compute_rho_at_PT): Root-finder failed to converge for EOS ID " << eos_id << "." << std::endl;
+        return ComputeResult(-7);
+    }
+
+    double rho_final = solver_result.root;
+
+    // 5. Call compute one last time with the found rho to get the full thermodynamic state
+    std::cout << "Info (compute_rho_at_PT): Found rho=" << rho_final << " for P=" << P_target
+              << ", T=" << T << " in " << solver_result.iterations << " iterations." << std::endl;
+
+    return this->compute(eos_id, rho_final, T);
+}
+
 void EquationOfStateV1::free_resources() {
   loaded_materials_
       .clear();  // unique_ptr handles deletion of MaterialEOS objects
