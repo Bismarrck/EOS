@@ -107,6 +107,12 @@ if(EOS_BUILD_EXAMPLES)
     unset(EOS_LIBRARY_IS_BUILDING_EXAMPLES CACHE)
 endif()
 
+option(EOS_INSTALL_FORTRAN_MODULES "Install pre-compiled Fortran .mod files (for controlled toolchains only)" OFF)
+if(EOS_INSTALL_FORTRAN_MODULES)
+    message(STATUS "Fortran module installation is ENABLED. "
+            "This is only suitable for environments with a consistent toolchain.")
+endif()
+
 # --- Installation Rules ---)
 
 # Install C++ headers

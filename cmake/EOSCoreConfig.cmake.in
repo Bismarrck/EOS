@@ -9,5 +9,15 @@ set(EOSCore_FORTRAN_MODULE_SOURCES_DIR "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INC
 # Define a variable for the specific interface file if commonly needed
 set(EOSCore_FORTRAN_INTERFACE_MODULE_FILE "${EOSCore_FORTRAN_MODULE_SOURCES_DIR}/module_eos_fortran_interface.F90")
 
+# Define a variable for the installed Fortran module (.mod file) directory
+if(@EOS_INSTALL_FORTRAN_MODULES@)
+  set(EOSCore_FORTRAN_MODULE_DIRECTORY "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/EOSCore/fortran_modules")
+  # Add this path to the list of paths that find_package sets up
+  # This makes it easier for customers, as they might not need to add it manually.
+  list(APPEND CMAKE_PREFIX_PATH "${EOSCore_FORTRAN_MODULE_DIRECTORY}")
+  # A better way is to ensure the INTERFACE_INCLUDE_DIRECTORIES of the imported target includes it.
+  # The $<INSTALL_INTERFACE:...> in src/fortran/CMakeLists.txt should handle this!
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/EOSCoreTargets.cmake")
 check_required_components(EOSCore)

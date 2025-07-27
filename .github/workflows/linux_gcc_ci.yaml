@@ -46,6 +46,7 @@ jobs:
             -DEOS_BUILD_TESTS=ON \
             -DEOS_BUILD_EXAMPLES=ON \
             -DEOS_BUILD_PYTHON_BINDINGS=ON \
+            -DEOS_INSTALL_FORTRAN_MODULES=ON \
             -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install_dir 
             # Installs to a directory within the workspace for testing
 
