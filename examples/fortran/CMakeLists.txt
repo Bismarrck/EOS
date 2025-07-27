@@ -29,9 +29,7 @@ else()
     # CMAKE_PREFIX_PATH should be set by the CI script (or user) to the install_dir
     find_package(EOSCore 1.0.0 REQUIRED CONFIG)
 
-    if(DEFINED EOSCore_FORTRAN_MODULE_DIRECTORY)
-        #
-    else()
+    if(NOT DEFINED EOSCore_FORTRAN_MODULE_DIRECTORY)
         # Get the path to the installed Fortran interface module source file
         if(NOT DEFINED EOSCore_FORTRAN_INTERFACE_MODULE_FILE OR NOT EXISTS ${EOSCore_FORTRAN_INTERFACE_MODULE_FILE})
             message(FATAL_ERROR "Installed module_eos_fortran_interface.f90 not found. "
@@ -42,8 +40,9 @@ else()
 
         # Add the installed Fortran interface module source to be compiled with this example
         list(APPEND DEMO_SOURCES ${EOSCore_FORTRAN_INTERFACE_MODULE_FILE})
-        add_executable(FortranEOSDemo ${DEMO_SOURCES})
     endif ()
+
+    add_executable(FortranEOSDemo ${DEMO_SOURCES})
 
     # When module_eos_fortran_interface.f90 (from installed source) is compiled as part of this target,
     # its .mod file is generated in CMAKE_CURRENT_BINARY_DIR (e.g., build_example_fortran/CMakeFiles/...).
