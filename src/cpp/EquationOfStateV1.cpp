@@ -11,6 +11,8 @@
 #include <iostream>  // For debug prints
 #include <sstream>   // For std::istringstream
 #include <string>
+#include <limits>
+#include <cmath>
 
 #include "eos_checksums.h"
 #include "eos_error_codes.h"
