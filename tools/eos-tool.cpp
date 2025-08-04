@@ -365,6 +365,7 @@ struct IsentropeOptions {
   double rho_max;
   int num_points = 100;
   double rho_initial = 1e-3;  // A small starting density to approximate P=0
+  std::string solver = "rk4";
   std::string data_dir;
   std::string output_file;
 };
@@ -419,8 +420,15 @@ void run_isentrope(const IsentropeOptions& opt) {
   double drho = (rho_end - rho_start) / (opt.num_points - 1);
 
   // Integrate from rho_start to rho_end with fixed steps
-  EOS_Toolkit::NumericalSolvers::integrate_ode_rk4(ode_system,
-                          state, rho_start, rho_end, drho, observer);
+  if (opt.solver == "rk4") {
+    std::cout << "Using RK4 solver." << std::endl;
+    EOS_Toolkit::NumericalSolvers::integrate_ode_rk4(
+        ode_system, state, rho_start, rho_end, drho, observer);
+  } else if (opt.solver == "heun") {
+    std::cout << "Using Heun's method (Trapezoid Rule) solver." << std::endl;
+    EOS_Toolkit::NumericalSolvers::integrate_ode_heun(
+        ode_system, state, rho_start, rho_end, drho, observer);
+  }
 
   std::cout << "Isentrope calculation complete." << std::endl;
 }
@@ -506,7 +514,12 @@ void setup_isentrope_subcommand(CLI::App& app) {
   cmd->add_option("--rho_max", opts->rho_max,
                   "Maximum density to integrate to (g/cc)")
       ->required();
-  // ... other options ...
+  std::map<std::string, std::string> solver_map = {{"rk4", "4th-order Runge-Kutta"}, {"heun", "Heun's Method (2nd-order)"}};
+  cmd->add_option("--solver", opts->solver, "ODE solver to use")
+      ->transform(CLI::CheckedTransformer(solver_map, CLI::ignore_case))
+      ->default_val("rk4");
+  // ...
+  cmd->callback([opts]() { run_isentrope(*opts); });
   cmd->callback([opts]() { run_isentrope(*opts); });
 }
 
