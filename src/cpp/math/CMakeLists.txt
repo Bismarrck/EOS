@@ -16,10 +16,6 @@ target_include_directories(EOSMath_lib
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         # The install path for this header would be something like include/EOSCore/math/
         $<INSTALL_INTERFACE:include/EOSCore/math>
-
-#        INTERFACE # Propagate dependency on Boost
-        # THIRDPARTY_DIR is defined in root CMakeLists.txt
-#        ${THIRDPARTY_DIR}/boost
 )
 
 # Add installation rule for the header if it's considered public

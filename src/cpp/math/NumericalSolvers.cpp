@@ -1,5 +1,4 @@
 #include "NumericalSolvers.h"
-#include <boost/numeric/odeint.hpp> // Odeint headers
 #include <iostream>  // For error messages
 #include <cmath>     // For std::abs
 #include <limits>    // For std::numeric_limits
@@ -106,20 +105,103 @@ void integrate_ode_rk4(
     double dx,
     ODEObserver& observer
 ) {
-  // Use a Runge-Kutta 4 stepper from Boost.Odeint
-  boost::numeric::odeint::runge_kutta4<ODEState> stepper;
+  if (dx == 0.0) {
+    std::cerr << "Error (RK4): Step size dx cannot be zero." << std::endl;
+    return;
+  }
+  if ((dx > 0 && x_start > x_end) || (dx < 0 && x_start < x_end)) {
+    std::cerr << "Warning (RK4): Integration range [x_start, x_end] is inconsistent with sign of step size dx." << std::endl;
+    // Continue anyway, the loop condition will handle it.
+  }
 
-  // Use integrate_const to take constant steps
-  // This will call the observer after each successful step.
-  boost::numeric::odeint::integrate_const(
-      stepper,
-      system,
-      start_state,
-      x_start,
-      x_end,
-      dx,
-      observer
-  );
+  ODEState y = start_state;
+  ODEState dydx(y.size());
+  ODEState k1(y.size()), k2(y.size()), k3(y.size()), k4(y.size());
+  ODEState y_temp(y.size());
+
+  double x = x_start;
+  int num_steps = static_cast<int>(std::abs((x_end - x_start) / dx));
+
+  // Call observer for the initial state
+  observer(y, x);
+
+  for (int i = 0; i < num_steps; ++i) {
+    // k1 = f(x, y)
+    system(y, dydx, x);
+    for (size_t j = 0; j < y.size(); ++j) k1[j] = dx * dydx[j];
+
+    // k2 = f(x + dx/2, y + k1/2)
+    for (size_t j = 0; j < y.size(); ++j) y_temp[j] = y[j] + 0.5 * k1[j];
+    system(y_temp, dydx, x + 0.5 * dx);
+    for (size_t j = 0; j < y.size(); ++j) k2[j] = dx * dydx[j];
+
+    // k3 = f(x + dx/2, y + k2/2)
+    for (size_t j = 0; j < y.size(); ++j) y_temp[j] = y[j] + 0.5 * k2[j];
+    system(y_temp, dydx, x + 0.5 * dx);
+    for (size_t j = 0; j < y.size(); ++j) k3[j] = dx * dydx[j];
+
+    // k4 = f(x + dx, y + k3)
+    for (size_t j = 0; j < y.size(); ++j) y_temp[j] = y[j] + k3[j];
+    system(y_temp, dydx, x + dx);
+    for (size_t j = 0; j < y.size(); ++j) k4[j] = dx * dydx[j];
+
+    // Update y
+    for (size_t j = 0; j < y.size(); ++j) {
+      y[j] += (k1[j] + 2.0 * k2[j] + 2.0 * k3[j] + k4[j]) / 6.0;
+    }
+
+    x += dx;
+    // Call observer with the new state
+    observer(y, x);
+  }
+}
+
+void integrate_ode_heun(
+    ODESystem& system,
+    ODEState& start_state,
+    double x_start,
+    double x_end,
+    double dx,
+    ODEObserver& observer
+) {
+  if (dx == 0.0) {
+    std::cerr << "Error (Heun): Step size dx cannot be zero." << std::endl;
+    return;
+  }
+  // ... (check for inconsistent x_start, x_end, dx signs as in RK4) ...
+
+  ODEState y = start_state;
+  ODEState dydx(y.size());
+  ODEState y_predictor(y.size());
+  ODEState dydx_predictor(y.size());
+
+  double x = x_start;
+  int num_steps = static_cast<int>(std::abs((x_end - x_start) / dx));
+
+  // Call observer for the initial state
+  observer(y, x);
+
+  for (int i = 0; i < num_steps; ++i) {
+    // 1. Calculate slope at current point: k1 = f(x, y)
+    system(y, dydx, x); // dydx now holds f(x, y)
+
+    // 2. Predictor step: y_tilde = y + h * f(x, y)
+    for (size_t j = 0; j < y.size(); ++j) {
+      y_predictor[j] = y[j] + dx * dydx[j];
+    }
+
+    // 3. Calculate slope at predicted point: k2 = f(x+h, y_tilde)
+    system(y_predictor, dydx_predictor, x + dx); // dydx_predictor now holds f(x+h, y_tilde)
+
+    // 4. Corrector step: Update y using average of slopes
+    for (size_t j = 0; j < y.size(); ++j) {
+      y[j] += (dx / 2.0) * (dydx[j] + dydx_predictor[j]);
+    }
+
+    x += dx;
+    // Call observer with the new state
+    observer(y, x);
+  }
 }
 
 } // namespace NumericalSolvers

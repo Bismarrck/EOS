@@ -43,6 +43,16 @@ void integrate_ode_rk4(
     ODEObserver& observer
 );
 
+// the trapezoidal rule for ODE integration (RK2)
+void integrate_ode_heun(
+    ODESystem& system,
+    ODEState& start_state,
+    double x_start,
+    double x_end,
+    double dx,
+    ODEObserver& observer
+);
+
 } // namespace NumericalSolvers
 } // namespace EOS_Toolkit
 
