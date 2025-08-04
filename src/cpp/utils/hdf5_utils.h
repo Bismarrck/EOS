@@ -27,6 +27,11 @@ bool read_hdf5_string_attribute(hid_t object_id, const char *attr_name,
 bool read_hdf5_scalar_vlen_string_dataset(hid_t file_id, const char *dset_name,
                                           std::string &out_str);
 
+herr_t write_hdf5_dataset_double_1d(hid_t file_id, const char *dset_name,
+                                    const hsize_t *dims, const double *data);
+herr_t write_hdf5_dataset_double_2d(hid_t file_id, const char *dset_name,
+                                    const hsize_t *dims, const double *data);
+
 }  // namespace HDF5Utils
 
 #endif  // HDF5_UTILS_H_H

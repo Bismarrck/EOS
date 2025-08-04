@@ -1,6 +1,6 @@
 # tools/CMakeLists.txt
-cmake_minimum_required(VERSION 3.15)
 project(EOSTools CXX)
+cmake_policy(SET CMP0074 NEW)
 
 # Check if the main library target EOSCore exists from the parent build
 if(NOT TARGET EOSCore)
@@ -13,6 +13,10 @@ add_executable(eos-tool eos-tool.cpp)
 # Link the tool against our main EOSCore library.
 # This provides all the necessary functions from EquationOfStateV1 and the Fortran routines.
 target_link_libraries(eos-tool PRIVATE EOSCore)
+
+# HDF5
+target_link_libraries(eos-tool PRIVATE HDF5::HDF5)
+target_include_directories(eos-tool PUBLIC ${HDF5_INCLUDE_DIRS})
 
 # --- Installation Rule ---
 # This command specifies where to install the 'eos-tool' executable.

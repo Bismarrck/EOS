@@ -303,3 +303,29 @@ bool HDF5Utils::read_hdf5_scalar_vlen_string_dataset(hid_t file_id,
   H5Dclose(dset_id);
   return true;
 }
+
+herr_t HDF5Utils::write_hdf5_dataset_double_1d(hid_t file_id, const char *dset_name,
+                                    const hsize_t *dims, const double *data) {
+  hid_t dspace_id = H5Screate_simple(1, dims, NULL);
+  hid_t dset_id = H5Dcreate2(file_id, dset_name, H5T_NATIVE_DOUBLE, dspace_id,
+                             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  if (dset_id < 0) return -1;
+  herr_t status =
+      H5Dwrite(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
+  H5Dclose(dset_id);
+  H5Sclose(dspace_id);
+  return status;
+}
+
+herr_t HDF5Utils::write_hdf5_dataset_double_2d(hid_t file_id, const char *dset_name,
+                                    const hsize_t *dims, const double *data) {
+  hid_t dspace_id = H5Screate_simple(2, dims, NULL);
+  hid_t dset_id = H5Dcreate2(file_id, dset_name, H5T_NATIVE_DOUBLE, dspace_id,
+                             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  if (dset_id < 0) return -1;
+  herr_t status =
+      H5Dwrite(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data);
+  H5Dclose(dset_id);
+  H5Sclose(dspace_id);
+  return status;
+}
